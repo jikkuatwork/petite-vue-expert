@@ -1,0 +1,2751 @@
+Cocat - File Concatenation Tool
+Generated on: 2024-05-10 10:32:51 +0530
+
+Directory Structure:
+reactivity
+├── index.js
+├── LICENSE
+├── package.json
+├── README.md
+└── src
+    ├── baseHandlers.ts
+    ├── collectionHandlers.ts
+    ├── computed.ts
+    ├── constants.ts
+    ├── deferredComputed.ts
+    ├── dep.ts
+    ├── effectScope.ts
+    ├── effect.ts
+    ├── index.ts
+    ├── reactiveEffect.ts
+    ├── reactive.ts
+    ├── ref.ts
+    └── warning.ts
+
+1 directory, 17 files
+
+=== End/Start of File ===
+File: reactivity/LICENSE
+The MIT License (MIT)
+
+Copyright (c) 2018-present, Yuxi (Evan) You
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+=== End/Start of File ===
+File: reactivity/README.md
+# @vue/reactivity
+
+## Usage Note
+
+This package is inlined into Global & Browser ESM builds of user-facing renderers (e.g. `@vue/runtime-dom`), but also published as a package that can be used standalone. The standalone build should not be used alongside a pre-bundled build of a user-facing renderer, as they will have different internal storage for reactivity connections. A user-facing renderer should re-export all APIs from this package.
+
+For full exposed APIs, see `src/index.ts`.
+
+## Credits
+
+The implementation of this module is inspired by the following prior art in the JavaScript ecosystem:
+
+- [Meteor Tracker](https://docs.meteor.com/api/tracker.html)
+- [nx-js/observer-util](https://github.com/nx-js/observer-util)
+- [salesforce/observable-membrane](https://github.com/salesforce/observable-membrane)
+
+## Caveats
+
+- Built-in objects are not observed except for `Array`, `Map`, `WeakMap`, `Set` and `WeakSet`.
+
+=== End/Start of File ===
+File: reactivity/index.js
+'use strict'
+
+if (process.env.NODE_ENV === 'production') {
+  module.exports = require('./dist/reactivity.cjs.prod.js')
+} else {
+  module.exports = require('./dist/reactivity.cjs.js')
+}
+
+=== End/Start of File ===
+File: reactivity/package.json
+{
+  "name": "@vue/reactivity",
+  "version": "3.4.27",
+  "description": "@vue/reactivity",
+  "main": "index.js",
+  "module": "dist/reactivity.esm-bundler.js",
+  "types": "dist/reactivity.d.ts",
+  "unpkg": "dist/reactivity.global.js",
+  "jsdelivr": "dist/reactivity.global.js",
+  "files": [
+    "index.js",
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/reactivity.d.ts",
+      "node": {
+        "production": "./dist/reactivity.cjs.prod.js",
+        "development": "./dist/reactivity.cjs.js",
+        "default": "./index.js"
+      },
+      "module": "./dist/reactivity.esm-bundler.js",
+      "import": "./dist/reactivity.esm-bundler.js",
+      "require": "./index.js"
+    },
+    "./*": "./*"
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vuejs/core.git",
+    "directory": "packages/reactivity"
+  },
+  "buildOptions": {
+    "name": "VueReactivity",
+    "formats": [
+      "esm-bundler",
+      "esm-browser",
+      "cjs",
+      "global"
+    ]
+  },
+  "keywords": [
+    "vue"
+  ],
+  "author": "Evan You",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/vuejs/core/issues"
+  },
+  "homepage": "https://github.com/vuejs/core/tree/main/packages/reactivity#readme",
+  "dependencies": {
+    "@vue/shared": "workspace:*"
+  }
+}
+
+=== End/Start of File ===
+File: reactivity/src/baseHandlers.ts
+import {
+  type Target,
+  isReadonly,
+  isShallow,
+  reactive,
+  reactiveMap,
+  readonly,
+  readonlyMap,
+  shallowReactiveMap,
+  shallowReadonlyMap,
+  toRaw,
+} from './reactive'
+import { ReactiveFlags, TrackOpTypes, TriggerOpTypes } from './constants'
+import {
+  pauseScheduling,
+  pauseTracking,
+  resetScheduling,
+  resetTracking,
+} from './effect'
+import { ITERATE_KEY, track, trigger } from './reactiveEffect'
+import {
+  hasChanged,
+  hasOwn,
+  isArray,
+  isIntegerKey,
+  isObject,
+  isSymbol,
+  makeMap,
+} from '@vue/shared'
+import { isRef } from './ref'
+import { warn } from './warning'
+
+const isNonTrackableKeys = /*#__PURE__*/ makeMap(`__proto__,__v_isRef,__isVue`)
+
+const builtInSymbols = new Set(
+  /*#__PURE__*/
+  Object.getOwnPropertyNames(Symbol)
+    // ios10.x Object.getOwnPropertyNames(Symbol) can enumerate 'arguments' and 'caller'
+    // but accessing them on Symbol leads to TypeError because Symbol is a strict mode
+    // function
+    .filter(key => key !== 'arguments' && key !== 'caller')
+    .map(key => (Symbol as any)[key])
+    .filter(isSymbol),
+)
+
+const arrayInstrumentations = /*#__PURE__*/ createArrayInstrumentations()
+
+function createArrayInstrumentations() {
+  const instrumentations: Record<string, Function> = {}
+  // instrument identity-sensitive Array methods to account for possible reactive
+  // values
+  ;(['includes', 'indexOf', 'lastIndexOf'] as const).forEach(key => {
+    instrumentations[key] = function (this: unknown[], ...args: unknown[]) {
+      const arr = toRaw(this) as any
+      for (let i = 0, l = this.length; i < l; i++) {
+        track(arr, TrackOpTypes.GET, i + '')
+      }
+      // we run the method using the original args first (which may be reactive)
+      const res = arr[key](...args)
+      if (res === -1 || res === false) {
+        // if that didn't work, run it again using raw values.
+        return arr[key](...args.map(toRaw))
+      } else {
+        return res
+      }
+    }
+  })
+  // instrument length-altering mutation methods to avoid length being tracked
+  // which leads to infinite loops in some cases (#2137)
+  ;(['push', 'pop', 'shift', 'unshift', 'splice'] as const).forEach(key => {
+    instrumentations[key] = function (this: unknown[], ...args: unknown[]) {
+      pauseTracking()
+      pauseScheduling()
+      const res = (toRaw(this) as any)[key].apply(this, args)
+      resetScheduling()
+      resetTracking()
+      return res
+    }
+  })
+  return instrumentations
+}
+
+function hasOwnProperty(this: object, key: unknown) {
+  // #10455 hasOwnProperty may be called with non-string values
+  if (!isSymbol(key)) key = String(key)
+  const obj = toRaw(this)
+  track(obj, TrackOpTypes.HAS, key)
+  return obj.hasOwnProperty(key as string)
+}
+
+class BaseReactiveHandler implements ProxyHandler<Target> {
+  constructor(
+    protected readonly _isReadonly = false,
+    protected readonly _isShallow = false,
+  ) {}
+
+  get(target: Target, key: string | symbol, receiver: object) {
+    const isReadonly = this._isReadonly,
+      isShallow = this._isShallow
+    if (key === ReactiveFlags.IS_REACTIVE) {
+      return !isReadonly
+    } else if (key === ReactiveFlags.IS_READONLY) {
+      return isReadonly
+    } else if (key === ReactiveFlags.IS_SHALLOW) {
+      return isShallow
+    } else if (key === ReactiveFlags.RAW) {
+      if (
+        receiver ===
+          (isReadonly
+            ? isShallow
+              ? shallowReadonlyMap
+              : readonlyMap
+            : isShallow
+              ? shallowReactiveMap
+              : reactiveMap
+          ).get(target) ||
+        // receiver is not the reactive proxy, but has the same prototype
+        // this means the reciever is a user proxy of the reactive proxy
+        Object.getPrototypeOf(target) === Object.getPrototypeOf(receiver)
+      ) {
+        return target
+      }
+      // early return undefined
+      return
+    }
+
+    const targetIsArray = isArray(target)
+
+    if (!isReadonly) {
+      if (targetIsArray && hasOwn(arrayInstrumentations, key)) {
+        return Reflect.get(arrayInstrumentations, key, receiver)
+      }
+      if (key === 'hasOwnProperty') {
+        return hasOwnProperty
+      }
+    }
+
+    const res = Reflect.get(target, key, receiver)
+
+    if (isSymbol(key) ? builtInSymbols.has(key) : isNonTrackableKeys(key)) {
+      return res
+    }
+
+    if (!isReadonly) {
+      track(target, TrackOpTypes.GET, key)
+    }
+
+    if (isShallow) {
+      return res
+    }
+
+    if (isRef(res)) {
+      // ref unwrapping - skip unwrap for Array + integer key.
+      return targetIsArray && isIntegerKey(key) ? res : res.value
+    }
+
+    if (isObject(res)) {
+      // Convert returned value into a proxy as well. we do the isObject check
+      // here to avoid invalid value warning. Also need to lazy access readonly
+      // and reactive here to avoid circular dependency.
+      return isReadonly ? readonly(res) : reactive(res)
+    }
+
+    return res
+  }
+}
+
+class MutableReactiveHandler extends BaseReactiveHandler {
+  constructor(isShallow = false) {
+    super(false, isShallow)
+  }
+
+  set(
+    target: object,
+    key: string | symbol,
+    value: unknown,
+    receiver: object,
+  ): boolean {
+    let oldValue = (target as any)[key]
+    if (!this._isShallow) {
+      const isOldValueReadonly = isReadonly(oldValue)
+      if (!isShallow(value) && !isReadonly(value)) {
+        oldValue = toRaw(oldValue)
+        value = toRaw(value)
+      }
+      if (!isArray(target) && isRef(oldValue) && !isRef(value)) {
+        if (isOldValueReadonly) {
+          return false
+        } else {
+          oldValue.value = value
+          return true
+        }
+      }
+    } else {
+      // in shallow mode, objects are set as-is regardless of reactive or not
+    }
+
+    const hadKey =
+      isArray(target) && isIntegerKey(key)
+        ? Number(key) < target.length
+        : hasOwn(target, key)
+    const result = Reflect.set(target, key, value, receiver)
+    // don't trigger if target is something up in the prototype chain of original
+    if (target === toRaw(receiver)) {
+      if (!hadKey) {
+        trigger(target, TriggerOpTypes.ADD, key, value)
+      } else if (hasChanged(value, oldValue)) {
+        trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+      }
+    }
+    return result
+  }
+
+  deleteProperty(target: object, key: string | symbol): boolean {
+    const hadKey = hasOwn(target, key)
+    const oldValue = (target as any)[key]
+    const result = Reflect.deleteProperty(target, key)
+    if (result && hadKey) {
+      trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
+    }
+    return result
+  }
+
+  has(target: object, key: string | symbol): boolean {
+    const result = Reflect.has(target, key)
+    if (!isSymbol(key) || !builtInSymbols.has(key)) {
+      track(target, TrackOpTypes.HAS, key)
+    }
+    return result
+  }
+  ownKeys(target: object): (string | symbol)[] {
+    track(
+      target,
+      TrackOpTypes.ITERATE,
+      isArray(target) ? 'length' : ITERATE_KEY,
+    )
+    return Reflect.ownKeys(target)
+  }
+}
+
+class ReadonlyReactiveHandler extends BaseReactiveHandler {
+  constructor(isShallow = false) {
+    super(true, isShallow)
+  }
+
+  set(target: object, key: string | symbol) {
+    if (__DEV__) {
+      warn(
+        `Set operation on key "${String(key)}" failed: target is readonly.`,
+        target,
+      )
+    }
+    return true
+  }
+
+  deleteProperty(target: object, key: string | symbol) {
+    if (__DEV__) {
+      warn(
+        `Delete operation on key "${String(key)}" failed: target is readonly.`,
+        target,
+      )
+    }
+    return true
+  }
+}
+
+export const mutableHandlers: ProxyHandler<object> =
+  /*#__PURE__*/ new MutableReactiveHandler()
+
+export const readonlyHandlers: ProxyHandler<object> =
+  /*#__PURE__*/ new ReadonlyReactiveHandler()
+
+export const shallowReactiveHandlers = /*#__PURE__*/ new MutableReactiveHandler(
+  true,
+)
+
+// Props handlers are special in the sense that it should not unwrap top-level
+// refs (in order to allow refs to be explicitly passed down), but should
+// retain the reactivity of the normal readonly object.
+export const shallowReadonlyHandlers =
+  /*#__PURE__*/ new ReadonlyReactiveHandler(true)
+
+=== End/Start of File ===
+File: reactivity/src/collectionHandlers.ts
+import { toRaw, toReactive, toReadonly } from './reactive'
+import {
+  ITERATE_KEY,
+  MAP_KEY_ITERATE_KEY,
+  track,
+  trigger,
+} from './reactiveEffect'
+import { ReactiveFlags, TrackOpTypes, TriggerOpTypes } from './constants'
+import { capitalize, hasChanged, hasOwn, isMap, toRawType } from '@vue/shared'
+import { warn } from './warning'
+
+type CollectionTypes = IterableCollections | WeakCollections
+
+type IterableCollections = Map<any, any> | Set<any>
+type WeakCollections = WeakMap<any, any> | WeakSet<any>
+type MapTypes = Map<any, any> | WeakMap<any, any>
+type SetTypes = Set<any> | WeakSet<any>
+
+const toShallow = <T extends unknown>(value: T): T => value
+
+const getProto = <T extends CollectionTypes>(v: T): any =>
+  Reflect.getPrototypeOf(v)
+
+function get(
+  target: MapTypes,
+  key: unknown,
+  isReadonly = false,
+  isShallow = false,
+) {
+  // #1772: readonly(reactive(Map)) should return readonly + reactive version
+  // of the value
+  target = (target as any)[ReactiveFlags.RAW]
+  const rawTarget = toRaw(target)
+  const rawKey = toRaw(key)
+  if (!isReadonly) {
+    if (hasChanged(key, rawKey)) {
+      track(rawTarget, TrackOpTypes.GET, key)
+    }
+    track(rawTarget, TrackOpTypes.GET, rawKey)
+  }
+  const { has } = getProto(rawTarget)
+  const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive
+  if (has.call(rawTarget, key)) {
+    return wrap(target.get(key))
+  } else if (has.call(rawTarget, rawKey)) {
+    return wrap(target.get(rawKey))
+  } else if (target !== rawTarget) {
+    // #3602 readonly(reactive(Map))
+    // ensure that the nested reactive `Map` can do tracking for itself
+    target.get(key)
+  }
+}
+
+function has(this: CollectionTypes, key: unknown, isReadonly = false): boolean {
+  const target = (this as any)[ReactiveFlags.RAW]
+  const rawTarget = toRaw(target)
+  const rawKey = toRaw(key)
+  if (!isReadonly) {
+    if (hasChanged(key, rawKey)) {
+      track(rawTarget, TrackOpTypes.HAS, key)
+    }
+    track(rawTarget, TrackOpTypes.HAS, rawKey)
+  }
+  return key === rawKey
+    ? target.has(key)
+    : target.has(key) || target.has(rawKey)
+}
+
+function size(target: IterableCollections, isReadonly = false) {
+  target = (target as any)[ReactiveFlags.RAW]
+  !isReadonly && track(toRaw(target), TrackOpTypes.ITERATE, ITERATE_KEY)
+  return Reflect.get(target, 'size', target)
+}
+
+function add(this: SetTypes, value: unknown) {
+  value = toRaw(value)
+  const target = toRaw(this)
+  const proto = getProto(target)
+  const hadKey = proto.has.call(target, value)
+  if (!hadKey) {
+    target.add(value)
+    trigger(target, TriggerOpTypes.ADD, value, value)
+  }
+  return this
+}
+
+function set(this: MapTypes, key: unknown, value: unknown) {
+  value = toRaw(value)
+  const target = toRaw(this)
+  const { has, get } = getProto(target)
+
+  let hadKey = has.call(target, key)
+  if (!hadKey) {
+    key = toRaw(key)
+    hadKey = has.call(target, key)
+  } else if (__DEV__) {
+    checkIdentityKeys(target, has, key)
+  }
+
+  const oldValue = get.call(target, key)
+  target.set(key, value)
+  if (!hadKey) {
+    trigger(target, TriggerOpTypes.ADD, key, value)
+  } else if (hasChanged(value, oldValue)) {
+    trigger(target, TriggerOpTypes.SET, key, value, oldValue)
+  }
+  return this
+}
+
+function deleteEntry(this: CollectionTypes, key: unknown) {
+  const target = toRaw(this)
+  const { has, get } = getProto(target)
+  let hadKey = has.call(target, key)
+  if (!hadKey) {
+    key = toRaw(key)
+    hadKey = has.call(target, key)
+  } else if (__DEV__) {
+    checkIdentityKeys(target, has, key)
+  }
+
+  const oldValue = get ? get.call(target, key) : undefined
+  // forward the operation before queueing reactions
+  const result = target.delete(key)
+  if (hadKey) {
+    trigger(target, TriggerOpTypes.DELETE, key, undefined, oldValue)
+  }
+  return result
+}
+
+function clear(this: IterableCollections) {
+  const target = toRaw(this)
+  const hadItems = target.size !== 0
+  const oldTarget = __DEV__
+    ? isMap(target)
+      ? new Map(target)
+      : new Set(target)
+    : undefined
+  // forward the operation before queueing reactions
+  const result = target.clear()
+  if (hadItems) {
+    trigger(target, TriggerOpTypes.CLEAR, undefined, undefined, oldTarget)
+  }
+  return result
+}
+
+function createForEach(isReadonly: boolean, isShallow: boolean) {
+  return function forEach(
+    this: IterableCollections,
+    callback: Function,
+    thisArg?: unknown,
+  ) {
+    const observed = this as any
+    const target = observed[ReactiveFlags.RAW]
+    const rawTarget = toRaw(target)
+    const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive
+    !isReadonly && track(rawTarget, TrackOpTypes.ITERATE, ITERATE_KEY)
+    return target.forEach((value: unknown, key: unknown) => {
+      // important: make sure the callback is
+      // 1. invoked with the reactive map as `this` and 3rd arg
+      // 2. the value received should be a corresponding reactive/readonly.
+      return callback.call(thisArg, wrap(value), wrap(key), observed)
+    })
+  }
+}
+
+interface Iterable {
+  [Symbol.iterator](): Iterator
+}
+
+interface Iterator {
+  next(value?: any): IterationResult
+}
+
+interface IterationResult {
+  value: any
+  done: boolean
+}
+
+function createIterableMethod(
+  method: string | symbol,
+  isReadonly: boolean,
+  isShallow: boolean,
+) {
+  return function (
+    this: IterableCollections,
+    ...args: unknown[]
+  ): Iterable & Iterator {
+    const target = (this as any)[ReactiveFlags.RAW]
+    const rawTarget = toRaw(target)
+    const targetIsMap = isMap(rawTarget)
+    const isPair =
+      method === 'entries' || (method === Symbol.iterator && targetIsMap)
+    const isKeyOnly = method === 'keys' && targetIsMap
+    const innerIterator = target[method](...args)
+    const wrap = isShallow ? toShallow : isReadonly ? toReadonly : toReactive
+    !isReadonly &&
+      track(
+        rawTarget,
+        TrackOpTypes.ITERATE,
+        isKeyOnly ? MAP_KEY_ITERATE_KEY : ITERATE_KEY,
+      )
+    // return a wrapped iterator which returns observed versions of the
+    // values emitted from the real iterator
+    return {
+      // iterator protocol
+      next() {
+        const { value, done } = innerIterator.next()
+        return done
+          ? { value, done }
+          : {
+              value: isPair ? [wrap(value[0]), wrap(value[1])] : wrap(value),
+              done,
+            }
+      },
+      // iterable protocol
+      [Symbol.iterator]() {
+        return this
+      },
+    }
+  }
+}
+
+function createReadonlyMethod(type: TriggerOpTypes): Function {
+  return function (this: CollectionTypes, ...args: unknown[]) {
+    if (__DEV__) {
+      const key = args[0] ? `on key "${args[0]}" ` : ``
+      warn(
+        `${capitalize(type)} operation ${key}failed: target is readonly.`,
+        toRaw(this),
+      )
+    }
+    return type === TriggerOpTypes.DELETE
+      ? false
+      : type === TriggerOpTypes.CLEAR
+        ? undefined
+        : this
+  }
+}
+
+type Instrumentations = Record<string | symbol, Function | number>
+
+function createInstrumentations() {
+  const mutableInstrumentations: Instrumentations = {
+    get(this: MapTypes, key: unknown) {
+      return get(this, key)
+    },
+    get size() {
+      return size(this as unknown as IterableCollections)
+    },
+    has,
+    add,
+    set,
+    delete: deleteEntry,
+    clear,
+    forEach: createForEach(false, false),
+  }
+
+  const shallowInstrumentations: Instrumentations = {
+    get(this: MapTypes, key: unknown) {
+      return get(this, key, false, true)
+    },
+    get size() {
+      return size(this as unknown as IterableCollections)
+    },
+    has,
+    add,
+    set,
+    delete: deleteEntry,
+    clear,
+    forEach: createForEach(false, true),
+  }
+
+  const readonlyInstrumentations: Instrumentations = {
+    get(this: MapTypes, key: unknown) {
+      return get(this, key, true)
+    },
+    get size() {
+      return size(this as unknown as IterableCollections, true)
+    },
+    has(this: MapTypes, key: unknown) {
+      return has.call(this, key, true)
+    },
+    add: createReadonlyMethod(TriggerOpTypes.ADD),
+    set: createReadonlyMethod(TriggerOpTypes.SET),
+    delete: createReadonlyMethod(TriggerOpTypes.DELETE),
+    clear: createReadonlyMethod(TriggerOpTypes.CLEAR),
+    forEach: createForEach(true, false),
+  }
+
+  const shallowReadonlyInstrumentations: Instrumentations = {
+    get(this: MapTypes, key: unknown) {
+      return get(this, key, true, true)
+    },
+    get size() {
+      return size(this as unknown as IterableCollections, true)
+    },
+    has(this: MapTypes, key: unknown) {
+      return has.call(this, key, true)
+    },
+    add: createReadonlyMethod(TriggerOpTypes.ADD),
+    set: createReadonlyMethod(TriggerOpTypes.SET),
+    delete: createReadonlyMethod(TriggerOpTypes.DELETE),
+    clear: createReadonlyMethod(TriggerOpTypes.CLEAR),
+    forEach: createForEach(true, true),
+  }
+
+  const iteratorMethods = [
+    'keys',
+    'values',
+    'entries',
+    Symbol.iterator,
+  ] as const
+
+  iteratorMethods.forEach(method => {
+    mutableInstrumentations[method] = createIterableMethod(method, false, false)
+    readonlyInstrumentations[method] = createIterableMethod(method, true, false)
+    shallowInstrumentations[method] = createIterableMethod(method, false, true)
+    shallowReadonlyInstrumentations[method] = createIterableMethod(
+      method,
+      true,
+      true,
+    )
+  })
+
+  return [
+    mutableInstrumentations,
+    readonlyInstrumentations,
+    shallowInstrumentations,
+    shallowReadonlyInstrumentations,
+  ]
+}
+
+const [
+  mutableInstrumentations,
+  readonlyInstrumentations,
+  shallowInstrumentations,
+  shallowReadonlyInstrumentations,
+] = /* #__PURE__*/ createInstrumentations()
+
+function createInstrumentationGetter(isReadonly: boolean, shallow: boolean) {
+  const instrumentations = shallow
+    ? isReadonly
+      ? shallowReadonlyInstrumentations
+      : shallowInstrumentations
+    : isReadonly
+      ? readonlyInstrumentations
+      : mutableInstrumentations
+
+  return (
+    target: CollectionTypes,
+    key: string | symbol,
+    receiver: CollectionTypes,
+  ) => {
+    if (key === ReactiveFlags.IS_REACTIVE) {
+      return !isReadonly
+    } else if (key === ReactiveFlags.IS_READONLY) {
+      return isReadonly
+    } else if (key === ReactiveFlags.RAW) {
+      return target
+    }
+
+    return Reflect.get(
+      hasOwn(instrumentations, key) && key in target
+        ? instrumentations
+        : target,
+      key,
+      receiver,
+    )
+  }
+}
+
+export const mutableCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  get: /*#__PURE__*/ createInstrumentationGetter(false, false),
+}
+
+export const shallowCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  get: /*#__PURE__*/ createInstrumentationGetter(false, true),
+}
+
+export const readonlyCollectionHandlers: ProxyHandler<CollectionTypes> = {
+  get: /*#__PURE__*/ createInstrumentationGetter(true, false),
+}
+
+export const shallowReadonlyCollectionHandlers: ProxyHandler<CollectionTypes> =
+  {
+    get: /*#__PURE__*/ createInstrumentationGetter(true, true),
+  }
+
+function checkIdentityKeys(
+  target: CollectionTypes,
+  has: (key: unknown) => boolean,
+  key: unknown,
+) {
+  const rawKey = toRaw(key)
+  if (rawKey !== key && has.call(target, rawKey)) {
+    const type = toRawType(target)
+    warn(
+      `Reactive ${type} contains both the raw and reactive ` +
+        `versions of the same object${type === `Map` ? ` as keys` : ``}, ` +
+        `which can lead to inconsistencies. ` +
+        `Avoid differentiating between the raw and reactive versions ` +
+        `of an object and only use the reactive version if possible.`,
+    )
+  }
+}
+
+=== End/Start of File ===
+File: reactivity/src/computed.ts
+import { type DebuggerOptions, ReactiveEffect } from './effect'
+import { type Ref, trackRefValue, triggerRefValue } from './ref'
+import { NOOP, hasChanged, isFunction } from '@vue/shared'
+import { toRaw } from './reactive'
+import type { Dep } from './dep'
+import { DirtyLevels, ReactiveFlags } from './constants'
+import { warn } from './warning'
+
+declare const ComputedRefSymbol: unique symbol
+
+export interface ComputedRef<T = any> extends WritableComputedRef<T> {
+  readonly value: T
+  [ComputedRefSymbol]: true
+}
+
+export interface WritableComputedRef<T> extends Ref<T> {
+  readonly effect: ReactiveEffect<T>
+}
+
+export type ComputedGetter<T> = (oldValue?: T) => T
+export type ComputedSetter<T> = (newValue: T) => void
+
+export interface WritableComputedOptions<T> {
+  get: ComputedGetter<T>
+  set: ComputedSetter<T>
+}
+
+export const COMPUTED_SIDE_EFFECT_WARN =
+  `Computed is still dirty after getter evaluation,` +
+  ` likely because a computed is mutating its own dependency in its getter.` +
+  ` State mutations in computed getters should be avoided. ` +
+  ` Check the docs for more details: https://vuejs.org/guide/essentials/computed.html#getters-should-be-side-effect-free`
+
+export class ComputedRefImpl<T> {
+  public dep?: Dep = undefined
+
+  private _value!: T
+  public readonly effect: ReactiveEffect<T>
+
+  public readonly __v_isRef = true
+  public readonly [ReactiveFlags.IS_READONLY]: boolean = false
+
+  public _cacheable: boolean
+
+  /**
+   * Dev only
+   */
+  _warnRecursive?: boolean
+
+  constructor(
+    private getter: ComputedGetter<T>,
+    private readonly _setter: ComputedSetter<T>,
+    isReadonly: boolean,
+    isSSR: boolean,
+  ) {
+    this.effect = new ReactiveEffect(
+      () => getter(this._value),
+      () =>
+        triggerRefValue(
+          this,
+          this.effect._dirtyLevel === DirtyLevels.MaybeDirty_ComputedSideEffect
+            ? DirtyLevels.MaybeDirty_ComputedSideEffect
+            : DirtyLevels.MaybeDirty,
+        ),
+    )
+    this.effect.computed = this
+    this.effect.active = this._cacheable = !isSSR
+    this[ReactiveFlags.IS_READONLY] = isReadonly
+  }
+
+  get value() {
+    // the computed ref may get wrapped by other proxies e.g. readonly() #3376
+    const self = toRaw(this)
+    if (
+      (!self._cacheable || self.effect.dirty) &&
+      hasChanged(self._value, (self._value = self.effect.run()!))
+    ) {
+      triggerRefValue(self, DirtyLevels.Dirty)
+    }
+    trackRefValue(self)
+    if (self.effect._dirtyLevel >= DirtyLevels.MaybeDirty_ComputedSideEffect) {
+      if (__DEV__ && (__TEST__ || this._warnRecursive)) {
+        warn(COMPUTED_SIDE_EFFECT_WARN, `\n\ngetter: `, this.getter)
+      }
+      triggerRefValue(self, DirtyLevels.MaybeDirty_ComputedSideEffect)
+    }
+    return self._value
+  }
+
+  set value(newValue: T) {
+    this._setter(newValue)
+  }
+
+  // #region polyfill _dirty for backward compatibility third party code for Vue <= 3.3.x
+  get _dirty() {
+    return this.effect.dirty
+  }
+
+  set _dirty(v) {
+    this.effect.dirty = v
+  }
+  // #endregion
+}
+
+/**
+ * Takes a getter function and returns a readonly reactive ref object for the
+ * returned value from the getter. It can also take an object with get and set
+ * functions to create a writable ref object.
+ *
+ * @example
+ * ```js
+ * // Creating a readonly computed ref:
+ * const count = ref(1)
+ * const plusOne = computed(() => count.value + 1)
+ *
+ * console.log(plusOne.value) // 2
+ * plusOne.value++ // error
+ * ```
+ *
+ * ```js
+ * // Creating a writable computed ref:
+ * const count = ref(1)
+ * const plusOne = computed({
+ *   get: () => count.value + 1,
+ *   set: (val) => {
+ *     count.value = val - 1
+ *   }
+ * })
+ *
+ * plusOne.value = 1
+ * console.log(count.value) // 0
+ * ```
+ *
+ * @param getter - Function that produces the next value.
+ * @param debugOptions - For debugging. See {@link https://vuejs.org/guide/extras/reactivity-in-depth.html#computed-debugging}.
+ * @see {@link https://vuejs.org/api/reactivity-core.html#computed}
+ */
+export function computed<T>(
+  getter: ComputedGetter<T>,
+  debugOptions?: DebuggerOptions,
+): ComputedRef<T>
+export function computed<T>(
+  options: WritableComputedOptions<T>,
+  debugOptions?: DebuggerOptions,
+): WritableComputedRef<T>
+export function computed<T>(
+  getterOrOptions: ComputedGetter<T> | WritableComputedOptions<T>,
+  debugOptions?: DebuggerOptions,
+  isSSR = false,
+) {
+  let getter: ComputedGetter<T>
+  let setter: ComputedSetter<T>
+
+  const onlyGetter = isFunction(getterOrOptions)
+  if (onlyGetter) {
+    getter = getterOrOptions
+    setter = __DEV__
+      ? () => {
+          warn('Write operation failed: computed value is readonly')
+        }
+      : NOOP
+  } else {
+    getter = getterOrOptions.get
+    setter = getterOrOptions.set
+  }
+
+  const cRef = new ComputedRefImpl(getter, setter, onlyGetter || !setter, isSSR)
+
+  if (__DEV__ && debugOptions && !isSSR) {
+    cRef.effect.onTrack = debugOptions.onTrack
+    cRef.effect.onTrigger = debugOptions.onTrigger
+  }
+
+  return cRef as any
+}
+
+=== End/Start of File ===
+File: reactivity/src/constants.ts
+// using literal strings instead of numbers so that it's easier to inspect
+// debugger events
+
+export enum TrackOpTypes {
+  GET = 'get',
+  HAS = 'has',
+  ITERATE = 'iterate',
+}
+
+export enum TriggerOpTypes {
+  SET = 'set',
+  ADD = 'add',
+  DELETE = 'delete',
+  CLEAR = 'clear',
+}
+
+export enum ReactiveFlags {
+  SKIP = '__v_skip',
+  IS_REACTIVE = '__v_isReactive',
+  IS_READONLY = '__v_isReadonly',
+  IS_SHALLOW = '__v_isShallow',
+  RAW = '__v_raw',
+}
+
+export enum DirtyLevels {
+  NotDirty = 0,
+  QueryingDirty = 1,
+  MaybeDirty_ComputedSideEffect = 2,
+  MaybeDirty = 3,
+  Dirty = 4,
+}
+
+=== End/Start of File ===
+File: reactivity/src/deferredComputed.ts
+import { computed } from './computed'
+
+/**
+ * @deprecated use `computed` instead. See #5912
+ */
+export const deferredComputed = computed
+
+=== End/Start of File ===
+File: reactivity/src/dep.ts
+import type { ReactiveEffect } from './effect'
+import type { ComputedRefImpl } from './computed'
+
+export type Dep = Map<ReactiveEffect, number> & {
+  cleanup: () => void
+  computed?: ComputedRefImpl<any>
+}
+
+export const createDep = (
+  cleanup: () => void,
+  computed?: ComputedRefImpl<any>,
+): Dep => {
+  const dep = new Map() as Dep
+  dep.cleanup = cleanup
+  dep.computed = computed
+  return dep
+}
+
+=== End/Start of File ===
+File: reactivity/src/effect.ts
+import { NOOP, extend } from '@vue/shared'
+import type { ComputedRefImpl } from './computed'
+import {
+  DirtyLevels,
+  type TrackOpTypes,
+  type TriggerOpTypes,
+} from './constants'
+import type { Dep } from './dep'
+import { type EffectScope, recordEffectScope } from './effectScope'
+
+export type EffectScheduler = (...args: any[]) => any
+
+export type DebuggerEvent = {
+  effect: ReactiveEffect
+} & DebuggerEventExtraInfo
+
+export type DebuggerEventExtraInfo = {
+  target: object
+  type: TrackOpTypes | TriggerOpTypes
+  key: any
+  newValue?: any
+  oldValue?: any
+  oldTarget?: Map<any, any> | Set<any>
+}
+
+export let activeEffect: ReactiveEffect | undefined
+
+export class ReactiveEffect<T = any> {
+  active = true
+  deps: Dep[] = []
+
+  /**
+   * Can be attached after creation
+   * @internal
+   */
+  computed?: ComputedRefImpl<T>
+  /**
+   * @internal
+   */
+  allowRecurse?: boolean
+
+  onStop?: () => void
+  // dev only
+  onTrack?: (event: DebuggerEvent) => void
+  // dev only
+  onTrigger?: (event: DebuggerEvent) => void
+
+  /**
+   * @internal
+   */
+  _dirtyLevel = DirtyLevels.Dirty
+  /**
+   * @internal
+   */
+  _trackId = 0
+  /**
+   * @internal
+   */
+  _runnings = 0
+  /**
+   * @internal
+   */
+  _shouldSchedule = false
+  /**
+   * @internal
+   */
+  _depsLength = 0
+
+  constructor(
+    public fn: () => T,
+    public trigger: () => void,
+    public scheduler?: EffectScheduler,
+    scope?: EffectScope,
+  ) {
+    recordEffectScope(this, scope)
+  }
+
+  public get dirty() {
+    if (
+      this._dirtyLevel === DirtyLevels.MaybeDirty_ComputedSideEffect ||
+      this._dirtyLevel === DirtyLevels.MaybeDirty
+    ) {
+      this._dirtyLevel = DirtyLevels.QueryingDirty
+      pauseTracking()
+      for (let i = 0; i < this._depsLength; i++) {
+        const dep = this.deps[i]
+        if (dep.computed) {
+          triggerComputed(dep.computed)
+          if (this._dirtyLevel >= DirtyLevels.Dirty) {
+            break
+          }
+        }
+      }
+      if (this._dirtyLevel === DirtyLevels.QueryingDirty) {
+        this._dirtyLevel = DirtyLevels.NotDirty
+      }
+      resetTracking()
+    }
+    return this._dirtyLevel >= DirtyLevels.Dirty
+  }
+
+  public set dirty(v) {
+    this._dirtyLevel = v ? DirtyLevels.Dirty : DirtyLevels.NotDirty
+  }
+
+  run() {
+    this._dirtyLevel = DirtyLevels.NotDirty
+    if (!this.active) {
+      return this.fn()
+    }
+    let lastShouldTrack = shouldTrack
+    let lastEffect = activeEffect
+    try {
+      shouldTrack = true
+      activeEffect = this
+      this._runnings++
+      preCleanupEffect(this)
+      return this.fn()
+    } finally {
+      postCleanupEffect(this)
+      this._runnings--
+      activeEffect = lastEffect
+      shouldTrack = lastShouldTrack
+    }
+  }
+
+  stop() {
+    if (this.active) {
+      preCleanupEffect(this)
+      postCleanupEffect(this)
+      this.onStop && this.onStop()
+      this.active = false
+    }
+  }
+}
+
+function triggerComputed(computed: ComputedRefImpl<any>) {
+  return computed.value
+}
+
+function preCleanupEffect(effect: ReactiveEffect) {
+  effect._trackId++
+  effect._depsLength = 0
+}
+
+function postCleanupEffect(effect: ReactiveEffect) {
+  if (effect.deps.length > effect._depsLength) {
+    for (let i = effect._depsLength; i < effect.deps.length; i++) {
+      cleanupDepEffect(effect.deps[i], effect)
+    }
+    effect.deps.length = effect._depsLength
+  }
+}
+
+function cleanupDepEffect(dep: Dep, effect: ReactiveEffect) {
+  const trackId = dep.get(effect)
+  if (trackId !== undefined && effect._trackId !== trackId) {
+    dep.delete(effect)
+    if (dep.size === 0) {
+      dep.cleanup()
+    }
+  }
+}
+
+export interface DebuggerOptions {
+  onTrack?: (event: DebuggerEvent) => void
+  onTrigger?: (event: DebuggerEvent) => void
+}
+
+export interface ReactiveEffectOptions extends DebuggerOptions {
+  lazy?: boolean
+  scheduler?: EffectScheduler
+  scope?: EffectScope
+  allowRecurse?: boolean
+  onStop?: () => void
+}
+
+export interface ReactiveEffectRunner<T = any> {
+  (): T
+  effect: ReactiveEffect
+}
+
+/**
+ * Registers the given function to track reactive updates.
+ *
+ * The given function will be run once immediately. Every time any reactive
+ * property that's accessed within it gets updated, the function will run again.
+ *
+ * @param fn - The function that will track reactive updates.
+ * @param options - Allows to control the effect's behaviour.
+ * @returns A runner that can be used to control the effect after creation.
+ */
+export function effect<T = any>(
+  fn: () => T,
+  options?: ReactiveEffectOptions,
+): ReactiveEffectRunner {
+  if ((fn as ReactiveEffectRunner).effect instanceof ReactiveEffect) {
+    fn = (fn as ReactiveEffectRunner).effect.fn
+  }
+
+  const _effect = new ReactiveEffect(fn, NOOP, () => {
+    if (_effect.dirty) {
+      _effect.run()
+    }
+  })
+  if (options) {
+    extend(_effect, options)
+    if (options.scope) recordEffectScope(_effect, options.scope)
+  }
+  if (!options || !options.lazy) {
+    _effect.run()
+  }
+  const runner = _effect.run.bind(_effect) as ReactiveEffectRunner
+  runner.effect = _effect
+  return runner
+}
+
+/**
+ * Stops the effect associated with the given runner.
+ *
+ * @param runner - Association with the effect to stop tracking.
+ */
+export function stop(runner: ReactiveEffectRunner) {
+  runner.effect.stop()
+}
+
+export let shouldTrack = true
+export let pauseScheduleStack = 0
+
+const trackStack: boolean[] = []
+
+/**
+ * Temporarily pauses tracking.
+ */
+export function pauseTracking() {
+  trackStack.push(shouldTrack)
+  shouldTrack = false
+}
+
+/**
+ * Re-enables effect tracking (if it was paused).
+ */
+export function enableTracking() {
+  trackStack.push(shouldTrack)
+  shouldTrack = true
+}
+
+/**
+ * Resets the previous global effect tracking state.
+ */
+export function resetTracking() {
+  const last = trackStack.pop()
+  shouldTrack = last === undefined ? true : last
+}
+
+export function pauseScheduling() {
+  pauseScheduleStack++
+}
+
+export function resetScheduling() {
+  pauseScheduleStack--
+  while (!pauseScheduleStack && queueEffectSchedulers.length) {
+    queueEffectSchedulers.shift()!()
+  }
+}
+
+export function trackEffect(
+  effect: ReactiveEffect,
+  dep: Dep,
+  debuggerEventExtraInfo?: DebuggerEventExtraInfo,
+) {
+  if (dep.get(effect) !== effect._trackId) {
+    dep.set(effect, effect._trackId)
+    const oldDep = effect.deps[effect._depsLength]
+    if (oldDep !== dep) {
+      if (oldDep) {
+        cleanupDepEffect(oldDep, effect)
+      }
+      effect.deps[effect._depsLength++] = dep
+    } else {
+      effect._depsLength++
+    }
+    if (__DEV__) {
+      effect.onTrack?.(extend({ effect }, debuggerEventExtraInfo!))
+    }
+  }
+}
+
+const queueEffectSchedulers: EffectScheduler[] = []
+
+export function triggerEffects(
+  dep: Dep,
+  dirtyLevel: DirtyLevels,
+  debuggerEventExtraInfo?: DebuggerEventExtraInfo,
+) {
+  pauseScheduling()
+  for (const effect of dep.keys()) {
+    // dep.get(effect) is very expensive, we need to calculate it lazily and reuse the result
+    let tracking: boolean | undefined
+    if (
+      effect._dirtyLevel < dirtyLevel &&
+      (tracking ??= dep.get(effect) === effect._trackId)
+    ) {
+      effect._shouldSchedule ||= effect._dirtyLevel === DirtyLevels.NotDirty
+      effect._dirtyLevel = dirtyLevel
+    }
+    if (
+      effect._shouldSchedule &&
+      (tracking ??= dep.get(effect) === effect._trackId)
+    ) {
+      if (__DEV__) {
+        effect.onTrigger?.(extend({ effect }, debuggerEventExtraInfo))
+      }
+      effect.trigger()
+      if (
+        (!effect._runnings || effect.allowRecurse) &&
+        effect._dirtyLevel !== DirtyLevels.MaybeDirty_ComputedSideEffect
+      ) {
+        effect._shouldSchedule = false
+        if (effect.scheduler) {
+          queueEffectSchedulers.push(effect.scheduler)
+        }
+      }
+    }
+  }
+  resetScheduling()
+}
+
+=== End/Start of File ===
+File: reactivity/src/effectScope.ts
+import type { ReactiveEffect } from './effect'
+import { warn } from './warning'
+
+let activeEffectScope: EffectScope | undefined
+
+export class EffectScope {
+  /**
+   * @internal
+   */
+  private _active = true
+  /**
+   * @internal
+   */
+  effects: ReactiveEffect[] = []
+  /**
+   * @internal
+   */
+  cleanups: (() => void)[] = []
+
+  /**
+   * only assigned by undetached scope
+   * @internal
+   */
+  parent: EffectScope | undefined
+  /**
+   * record undetached scopes
+   * @internal
+   */
+  scopes: EffectScope[] | undefined
+  /**
+   * track a child scope's index in its parent's scopes array for optimized
+   * removal
+   * @internal
+   */
+  private index: number | undefined
+
+  constructor(public detached = false) {
+    this.parent = activeEffectScope
+    if (!detached && activeEffectScope) {
+      this.index =
+        (activeEffectScope.scopes || (activeEffectScope.scopes = [])).push(
+          this,
+        ) - 1
+    }
+  }
+
+  get active() {
+    return this._active
+  }
+
+  run<T>(fn: () => T): T | undefined {
+    if (this._active) {
+      const currentEffectScope = activeEffectScope
+      try {
+        activeEffectScope = this
+        return fn()
+      } finally {
+        activeEffectScope = currentEffectScope
+      }
+    } else if (__DEV__) {
+      warn(`cannot run an inactive effect scope.`)
+    }
+  }
+
+  /**
+   * This should only be called on non-detached scopes
+   * @internal
+   */
+  on() {
+    activeEffectScope = this
+  }
+
+  /**
+   * This should only be called on non-detached scopes
+   * @internal
+   */
+  off() {
+    activeEffectScope = this.parent
+  }
+
+  stop(fromParent?: boolean) {
+    if (this._active) {
+      let i, l
+      for (i = 0, l = this.effects.length; i < l; i++) {
+        this.effects[i].stop()
+      }
+      for (i = 0, l = this.cleanups.length; i < l; i++) {
+        this.cleanups[i]()
+      }
+      if (this.scopes) {
+        for (i = 0, l = this.scopes.length; i < l; i++) {
+          this.scopes[i].stop(true)
+        }
+      }
+      // nested scope, dereference from parent to avoid memory leaks
+      if (!this.detached && this.parent && !fromParent) {
+        // optimized O(1) removal
+        const last = this.parent.scopes!.pop()
+        if (last && last !== this) {
+          this.parent.scopes![this.index!] = last
+          last.index = this.index!
+        }
+      }
+      this.parent = undefined
+      this._active = false
+    }
+  }
+}
+
+/**
+ * Creates an effect scope object which can capture the reactive effects (i.e.
+ * computed and watchers) created within it so that these effects can be
+ * disposed together. For detailed use cases of this API, please consult its
+ * corresponding {@link https://github.com/vuejs/rfcs/blob/master/active-rfcs/0041-reactivity-effect-scope.md | RFC}.
+ *
+ * @param detached - Can be used to create a "detached" effect scope.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#effectscope}
+ */
+export function effectScope(detached?: boolean) {
+  return new EffectScope(detached)
+}
+
+export function recordEffectScope(
+  effect: ReactiveEffect,
+  scope: EffectScope | undefined = activeEffectScope,
+) {
+  if (scope && scope.active) {
+    scope.effects.push(effect)
+  }
+}
+
+/**
+ * Returns the current active effect scope if there is one.
+ *
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#getcurrentscope}
+ */
+export function getCurrentScope() {
+  return activeEffectScope
+}
+
+/**
+ * Registers a dispose callback on the current active effect scope. The
+ * callback will be invoked when the associated effect scope is stopped.
+ *
+ * @param fn - The callback function to attach to the scope's cleanup.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#onscopedispose}
+ */
+export function onScopeDispose(fn: () => void) {
+  if (activeEffectScope) {
+    activeEffectScope.cleanups.push(fn)
+  } else if (__DEV__) {
+    warn(
+      `onScopeDispose() is called when there is no active effect scope` +
+        ` to be associated with.`,
+    )
+  }
+}
+
+=== End/Start of File ===
+File: reactivity/src/index.ts
+export {
+  ref,
+  shallowRef,
+  isRef,
+  toRef,
+  toValue,
+  toRefs,
+  unref,
+  proxyRefs,
+  customRef,
+  triggerRef,
+  type Ref,
+  type MaybeRef,
+  type MaybeRefOrGetter,
+  type ToRef,
+  type ToRefs,
+  type UnwrapRef,
+  type ShallowRef,
+  type ShallowUnwrapRef,
+  type RefUnwrapBailTypes,
+  type CustomRefFactory,
+} from './ref'
+export {
+  reactive,
+  readonly,
+  isReactive,
+  isReadonly,
+  isShallow,
+  isProxy,
+  shallowReactive,
+  shallowReadonly,
+  markRaw,
+  toRaw,
+  type Raw,
+  type DeepReadonly,
+  type ShallowReactive,
+  type UnwrapNestedRefs,
+} from './reactive'
+export {
+  computed,
+  type ComputedRef,
+  type WritableComputedRef,
+  type WritableComputedOptions,
+  type ComputedGetter,
+  type ComputedSetter,
+  type ComputedRefImpl,
+} from './computed'
+export { deferredComputed } from './deferredComputed'
+export {
+  effect,
+  stop,
+  enableTracking,
+  pauseTracking,
+  resetTracking,
+  pauseScheduling,
+  resetScheduling,
+  ReactiveEffect,
+  type ReactiveEffectRunner,
+  type ReactiveEffectOptions,
+  type EffectScheduler,
+  type DebuggerOptions,
+  type DebuggerEvent,
+  type DebuggerEventExtraInfo,
+} from './effect'
+export { trigger, track, ITERATE_KEY } from './reactiveEffect'
+export {
+  effectScope,
+  EffectScope,
+  getCurrentScope,
+  onScopeDispose,
+} from './effectScope'
+export { TrackOpTypes, TriggerOpTypes, ReactiveFlags } from './constants'
+
+=== End/Start of File ===
+File: reactivity/src/reactive.ts
+import { def, isObject, toRawType } from '@vue/shared'
+import {
+  mutableHandlers,
+  readonlyHandlers,
+  shallowReactiveHandlers,
+  shallowReadonlyHandlers,
+} from './baseHandlers'
+import {
+  mutableCollectionHandlers,
+  readonlyCollectionHandlers,
+  shallowCollectionHandlers,
+  shallowReadonlyCollectionHandlers,
+} from './collectionHandlers'
+import type { RawSymbol, Ref, UnwrapRefSimple } from './ref'
+import { ReactiveFlags } from './constants'
+import { warn } from './warning'
+
+export interface Target {
+  [ReactiveFlags.SKIP]?: boolean
+  [ReactiveFlags.IS_REACTIVE]?: boolean
+  [ReactiveFlags.IS_READONLY]?: boolean
+  [ReactiveFlags.IS_SHALLOW]?: boolean
+  [ReactiveFlags.RAW]?: any
+}
+
+export const reactiveMap = new WeakMap<Target, any>()
+export const shallowReactiveMap = new WeakMap<Target, any>()
+export const readonlyMap = new WeakMap<Target, any>()
+export const shallowReadonlyMap = new WeakMap<Target, any>()
+
+enum TargetType {
+  INVALID = 0,
+  COMMON = 1,
+  COLLECTION = 2,
+}
+
+function targetTypeMap(rawType: string) {
+  switch (rawType) {
+    case 'Object':
+    case 'Array':
+      return TargetType.COMMON
+    case 'Map':
+    case 'Set':
+    case 'WeakMap':
+    case 'WeakSet':
+      return TargetType.COLLECTION
+    default:
+      return TargetType.INVALID
+  }
+}
+
+function getTargetType(value: Target) {
+  return value[ReactiveFlags.SKIP] || !Object.isExtensible(value)
+    ? TargetType.INVALID
+    : targetTypeMap(toRawType(value))
+}
+
+// only unwrap nested ref
+export type UnwrapNestedRefs<T> = T extends Ref ? T : UnwrapRefSimple<T>
+
+/**
+ * Returns a reactive proxy of the object.
+ *
+ * The reactive conversion is "deep": it affects all nested properties. A
+ * reactive object also deeply unwraps any properties that are refs while
+ * maintaining reactivity.
+ *
+ * @example
+ * ```js
+ * const obj = reactive({ count: 0 })
+ * ```
+ *
+ * @param target - The source object.
+ * @see {@link https://vuejs.org/api/reactivity-core.html#reactive}
+ */
+export function reactive<T extends object>(target: T): UnwrapNestedRefs<T>
+export function reactive(target: object) {
+  // if trying to observe a readonly proxy, return the readonly version.
+  if (isReadonly(target)) {
+    return target
+  }
+  return createReactiveObject(
+    target,
+    false,
+    mutableHandlers,
+    mutableCollectionHandlers,
+    reactiveMap,
+  )
+}
+
+export declare const ShallowReactiveMarker: unique symbol
+
+export type ShallowReactive<T> = T & { [ShallowReactiveMarker]?: true }
+
+/**
+ * Shallow version of {@link reactive()}.
+ *
+ * Unlike {@link reactive()}, there is no deep conversion: only root-level
+ * properties are reactive for a shallow reactive object. Property values are
+ * stored and exposed as-is - this also means properties with ref values will
+ * not be automatically unwrapped.
+ *
+ * @example
+ * ```js
+ * const state = shallowReactive({
+ *   foo: 1,
+ *   nested: {
+ *     bar: 2
+ *   }
+ * })
+ *
+ * // mutating state's own properties is reactive
+ * state.foo++
+ *
+ * // ...but does not convert nested objects
+ * isReactive(state.nested) // false
+ *
+ * // NOT reactive
+ * state.nested.bar++
+ * ```
+ *
+ * @param target - The source object.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#shallowreactive}
+ */
+export function shallowReactive<T extends object>(
+  target: T,
+): ShallowReactive<T> {
+  return createReactiveObject(
+    target,
+    false,
+    shallowReactiveHandlers,
+    shallowCollectionHandlers,
+    shallowReactiveMap,
+  )
+}
+
+type Primitive = string | number | boolean | bigint | symbol | undefined | null
+type Builtin = Primitive | Function | Date | Error | RegExp
+export type DeepReadonly<T> = T extends Builtin
+  ? T
+  : T extends Map<infer K, infer V>
+    ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
+    : T extends ReadonlyMap<infer K, infer V>
+      ? ReadonlyMap<DeepReadonly<K>, DeepReadonly<V>>
+      : T extends WeakMap<infer K, infer V>
+        ? WeakMap<DeepReadonly<K>, DeepReadonly<V>>
+        : T extends Set<infer U>
+          ? ReadonlySet<DeepReadonly<U>>
+          : T extends ReadonlySet<infer U>
+            ? ReadonlySet<DeepReadonly<U>>
+            : T extends WeakSet<infer U>
+              ? WeakSet<DeepReadonly<U>>
+              : T extends Promise<infer U>
+                ? Promise<DeepReadonly<U>>
+                : T extends Ref<infer U>
+                  ? Readonly<Ref<DeepReadonly<U>>>
+                  : T extends {}
+                    ? { readonly [K in keyof T]: DeepReadonly<T[K]> }
+                    : Readonly<T>
+
+/**
+ * Takes an object (reactive or plain) or a ref and returns a readonly proxy to
+ * the original.
+ *
+ * A readonly proxy is deep: any nested property accessed will be readonly as
+ * well. It also has the same ref-unwrapping behavior as {@link reactive()},
+ * except the unwrapped values will also be made readonly.
+ *
+ * @example
+ * ```js
+ * const original = reactive({ count: 0 })
+ *
+ * const copy = readonly(original)
+ *
+ * watchEffect(() => {
+ *   // works for reactivity tracking
+ *   console.log(copy.count)
+ * })
+ *
+ * // mutating original will trigger watchers relying on the copy
+ * original.count++
+ *
+ * // mutating the copy will fail and result in a warning
+ * copy.count++ // warning!
+ * ```
+ *
+ * @param target - The source object.
+ * @see {@link https://vuejs.org/api/reactivity-core.html#readonly}
+ */
+export function readonly<T extends object>(
+  target: T,
+): DeepReadonly<UnwrapNestedRefs<T>> {
+  return createReactiveObject(
+    target,
+    true,
+    readonlyHandlers,
+    readonlyCollectionHandlers,
+    readonlyMap,
+  )
+}
+
+/**
+ * Shallow version of {@link readonly()}.
+ *
+ * Unlike {@link readonly()}, there is no deep conversion: only root-level
+ * properties are made readonly. Property values are stored and exposed as-is -
+ * this also means properties with ref values will not be automatically
+ * unwrapped.
+ *
+ * @example
+ * ```js
+ * const state = shallowReadonly({
+ *   foo: 1,
+ *   nested: {
+ *     bar: 2
+ *   }
+ * })
+ *
+ * // mutating state's own properties will fail
+ * state.foo++
+ *
+ * // ...but works on nested objects
+ * isReadonly(state.nested) // false
+ *
+ * // works
+ * state.nested.bar++
+ * ```
+ *
+ * @param target - The source object.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#shallowreadonly}
+ */
+export function shallowReadonly<T extends object>(target: T): Readonly<T> {
+  return createReactiveObject(
+    target,
+    true,
+    shallowReadonlyHandlers,
+    shallowReadonlyCollectionHandlers,
+    shallowReadonlyMap,
+  )
+}
+
+function createReactiveObject(
+  target: Target,
+  isReadonly: boolean,
+  baseHandlers: ProxyHandler<any>,
+  collectionHandlers: ProxyHandler<any>,
+  proxyMap: WeakMap<Target, any>,
+) {
+  if (!isObject(target)) {
+    if (__DEV__) {
+      warn(`value cannot be made reactive: ${String(target)}`)
+    }
+    return target
+  }
+  // target is already a Proxy, return it.
+  // exception: calling readonly() on a reactive object
+  if (
+    target[ReactiveFlags.RAW] &&
+    !(isReadonly && target[ReactiveFlags.IS_REACTIVE])
+  ) {
+    return target
+  }
+  // target already has corresponding Proxy
+  const existingProxy = proxyMap.get(target)
+  if (existingProxy) {
+    return existingProxy
+  }
+  // only specific value types can be observed.
+  const targetType = getTargetType(target)
+  if (targetType === TargetType.INVALID) {
+    return target
+  }
+  const proxy = new Proxy(
+    target,
+    targetType === TargetType.COLLECTION ? collectionHandlers : baseHandlers,
+  )
+  proxyMap.set(target, proxy)
+  return proxy
+}
+
+/**
+ * Checks if an object is a proxy created by {@link reactive()} or
+ * {@link shallowReactive()} (or {@link ref()} in some cases).
+ *
+ * @example
+ * ```js
+ * isReactive(reactive({}))            // => true
+ * isReactive(readonly(reactive({})))  // => true
+ * isReactive(ref({}).value)           // => true
+ * isReactive(readonly(ref({})).value) // => true
+ * isReactive(ref(true))               // => false
+ * isReactive(shallowRef({}).value)    // => false
+ * isReactive(shallowReactive({}))     // => true
+ * ```
+ *
+ * @param value - The value to check.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#isreactive}
+ */
+export function isReactive(value: unknown): boolean {
+  if (isReadonly(value)) {
+    return isReactive((value as Target)[ReactiveFlags.RAW])
+  }
+  return !!(value && (value as Target)[ReactiveFlags.IS_REACTIVE])
+}
+
+/**
+ * Checks whether the passed value is a readonly object. The properties of a
+ * readonly object can change, but they can't be assigned directly via the
+ * passed object.
+ *
+ * The proxies created by {@link readonly()} and {@link shallowReadonly()} are
+ * both considered readonly, as is a computed ref without a set function.
+ *
+ * @param value - The value to check.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#isreadonly}
+ */
+export function isReadonly(value: unknown): boolean {
+  return !!(value && (value as Target)[ReactiveFlags.IS_READONLY])
+}
+
+export function isShallow(value: unknown): boolean {
+  return !!(value && (value as Target)[ReactiveFlags.IS_SHALLOW])
+}
+
+/**
+ * Checks if an object is a proxy created by {@link reactive},
+ * {@link readonly}, {@link shallowReactive} or {@link shallowReadonly()}.
+ *
+ * @param value - The value to check.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#isproxy}
+ */
+export function isProxy(value: any): boolean {
+  return value ? !!value[ReactiveFlags.RAW] : false
+}
+
+/**
+ * Returns the raw, original object of a Vue-created proxy.
+ *
+ * `toRaw()` can return the original object from proxies created by
+ * {@link reactive()}, {@link readonly()}, {@link shallowReactive()} or
+ * {@link shallowReadonly()}.
+ *
+ * This is an escape hatch that can be used to temporarily read without
+ * incurring proxy access / tracking overhead or write without triggering
+ * changes. It is **not** recommended to hold a persistent reference to the
+ * original object. Use with caution.
+ *
+ * @example
+ * ```js
+ * const foo = {}
+ * const reactiveFoo = reactive(foo)
+ *
+ * console.log(toRaw(reactiveFoo) === foo) // true
+ * ```
+ *
+ * @param observed - The object for which the "raw" value is requested.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#toraw}
+ */
+export function toRaw<T>(observed: T): T {
+  const raw = observed && (observed as Target)[ReactiveFlags.RAW]
+  return raw ? toRaw(raw) : observed
+}
+
+export type Raw<T> = T & { [RawSymbol]?: true }
+
+/**
+ * Marks an object so that it will never be converted to a proxy. Returns the
+ * object itself.
+ *
+ * @example
+ * ```js
+ * const foo = markRaw({})
+ * console.log(isReactive(reactive(foo))) // false
+ *
+ * // also works when nested inside other reactive objects
+ * const bar = reactive({ foo })
+ * console.log(isReactive(bar.foo)) // false
+ * ```
+ *
+ * **Warning:** `markRaw()` together with the shallow APIs such as
+ * {@link shallowReactive()} allow you to selectively opt-out of the default
+ * deep reactive/readonly conversion and embed raw, non-proxied objects in your
+ * state graph.
+ *
+ * @param value - The object to be marked as "raw".
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#markraw}
+ */
+export function markRaw<T extends object>(value: T): Raw<T> {
+  if (Object.isExtensible(value)) {
+    def(value, ReactiveFlags.SKIP, true)
+  }
+  return value
+}
+
+/**
+ * Returns a reactive proxy of the given value (if possible).
+ *
+ * If the given value is not an object, the original value itself is returned.
+ *
+ * @param value - The value for which a reactive proxy shall be created.
+ */
+export const toReactive = <T extends unknown>(value: T): T =>
+  isObject(value) ? reactive(value) : value
+
+/**
+ * Returns a readonly proxy of the given value (if possible).
+ *
+ * If the given value is not an object, the original value itself is returned.
+ *
+ * @param value - The value for which a readonly proxy shall be created.
+ */
+export const toReadonly = <T extends unknown>(value: T): DeepReadonly<T> =>
+  isObject(value) ? readonly(value) : (value as DeepReadonly<T>)
+
+=== End/Start of File ===
+File: reactivity/src/reactiveEffect.ts
+import { isArray, isIntegerKey, isMap, isSymbol } from '@vue/shared'
+import { DirtyLevels, type TrackOpTypes, TriggerOpTypes } from './constants'
+import { type Dep, createDep } from './dep'
+import {
+  activeEffect,
+  pauseScheduling,
+  resetScheduling,
+  shouldTrack,
+  trackEffect,
+  triggerEffects,
+} from './effect'
+
+// The main WeakMap that stores {target -> key -> dep} connections.
+// Conceptually, it's easier to think of a dependency as a Dep class
+// which maintains a Set of subscribers, but we simply store them as
+// raw Maps to reduce memory overhead.
+type KeyToDepMap = Map<any, Dep>
+const targetMap = new WeakMap<object, KeyToDepMap>()
+
+export const ITERATE_KEY = Symbol(__DEV__ ? 'iterate' : '')
+export const MAP_KEY_ITERATE_KEY = Symbol(__DEV__ ? 'Map key iterate' : '')
+
+/**
+ * Tracks access to a reactive property.
+ *
+ * This will check which effect is running at the moment and record it as dep
+ * which records all effects that depend on the reactive property.
+ *
+ * @param target - Object holding the reactive property.
+ * @param type - Defines the type of access to the reactive property.
+ * @param key - Identifier of the reactive property to track.
+ */
+export function track(target: object, type: TrackOpTypes, key: unknown) {
+  if (shouldTrack && activeEffect) {
+    let depsMap = targetMap.get(target)
+    if (!depsMap) {
+      targetMap.set(target, (depsMap = new Map()))
+    }
+    let dep = depsMap.get(key)
+    if (!dep) {
+      depsMap.set(key, (dep = createDep(() => depsMap!.delete(key))))
+    }
+    trackEffect(
+      activeEffect,
+      dep,
+      __DEV__
+        ? {
+            target,
+            type,
+            key,
+          }
+        : void 0,
+    )
+  }
+}
+
+/**
+ * Finds all deps associated with the target (or a specific property) and
+ * triggers the effects stored within.
+ *
+ * @param target - The reactive object.
+ * @param type - Defines the type of the operation that needs to trigger effects.
+ * @param key - Can be used to target a specific reactive property in the target object.
+ */
+export function trigger(
+  target: object,
+  type: TriggerOpTypes,
+  key?: unknown,
+  newValue?: unknown,
+  oldValue?: unknown,
+  oldTarget?: Map<unknown, unknown> | Set<unknown>,
+) {
+  const depsMap = targetMap.get(target)
+  if (!depsMap) {
+    // never been tracked
+    return
+  }
+
+  let deps: (Dep | undefined)[] = []
+  if (type === TriggerOpTypes.CLEAR) {
+    // collection being cleared
+    // trigger all effects for target
+    deps = [...depsMap.values()]
+  } else if (key === 'length' && isArray(target)) {
+    const newLength = Number(newValue)
+    depsMap.forEach((dep, key) => {
+      if (key === 'length' || (!isSymbol(key) && key >= newLength)) {
+        deps.push(dep)
+      }
+    })
+  } else {
+    // schedule runs for SET | ADD | DELETE
+    if (key !== void 0) {
+      deps.push(depsMap.get(key))
+    }
+
+    // also run for iteration key on ADD | DELETE | Map.SET
+    switch (type) {
+      case TriggerOpTypes.ADD:
+        if (!isArray(target)) {
+          deps.push(depsMap.get(ITERATE_KEY))
+          if (isMap(target)) {
+            deps.push(depsMap.get(MAP_KEY_ITERATE_KEY))
+          }
+        } else if (isIntegerKey(key)) {
+          // new index added to array -> length changes
+          deps.push(depsMap.get('length'))
+        }
+        break
+      case TriggerOpTypes.DELETE:
+        if (!isArray(target)) {
+          deps.push(depsMap.get(ITERATE_KEY))
+          if (isMap(target)) {
+            deps.push(depsMap.get(MAP_KEY_ITERATE_KEY))
+          }
+        }
+        break
+      case TriggerOpTypes.SET:
+        if (isMap(target)) {
+          deps.push(depsMap.get(ITERATE_KEY))
+        }
+        break
+    }
+  }
+
+  pauseScheduling()
+  for (const dep of deps) {
+    if (dep) {
+      triggerEffects(
+        dep,
+        DirtyLevels.Dirty,
+        __DEV__
+          ? {
+              target,
+              type,
+              key,
+              newValue,
+              oldValue,
+              oldTarget,
+            }
+          : void 0,
+      )
+    }
+  }
+  resetScheduling()
+}
+
+export function getDepFromReactive(object: any, key: string | number | symbol) {
+  const depsMap = targetMap.get(object)
+  return depsMap && depsMap.get(key)
+}
+
+=== End/Start of File ===
+File: reactivity/src/ref.ts
+import type { ComputedRef } from './computed'
+import {
+  activeEffect,
+  shouldTrack,
+  trackEffect,
+  triggerEffects,
+} from './effect'
+import { DirtyLevels, TrackOpTypes, TriggerOpTypes } from './constants'
+import {
+  type IfAny,
+  hasChanged,
+  isArray,
+  isFunction,
+  isObject,
+} from '@vue/shared'
+import {
+  isProxy,
+  isReactive,
+  isReadonly,
+  isShallow,
+  toRaw,
+  toReactive,
+} from './reactive'
+import type { ShallowReactiveMarker } from './reactive'
+import { type Dep, createDep } from './dep'
+import { ComputedRefImpl } from './computed'
+import { getDepFromReactive } from './reactiveEffect'
+import { warn } from './warning'
+
+declare const RefSymbol: unique symbol
+export declare const RawSymbol: unique symbol
+
+export interface Ref<T = any> {
+  value: T
+  /**
+   * Type differentiator only.
+   * We need this to be in public d.ts but don't want it to show up in IDE
+   * autocomplete, so we use a private Symbol instead.
+   */
+  [RefSymbol]: true
+}
+
+type RefBase<T> = {
+  dep?: Dep
+  value: T
+}
+
+export function trackRefValue(ref: RefBase<any>) {
+  if (shouldTrack && activeEffect) {
+    ref = toRaw(ref)
+    trackEffect(
+      activeEffect,
+      (ref.dep ??= createDep(
+        () => (ref.dep = undefined),
+        ref instanceof ComputedRefImpl ? ref : undefined,
+      )),
+      __DEV__
+        ? {
+            target: ref,
+            type: TrackOpTypes.GET,
+            key: 'value',
+          }
+        : void 0,
+    )
+  }
+}
+
+export function triggerRefValue(
+  ref: RefBase<any>,
+  dirtyLevel: DirtyLevels = DirtyLevels.Dirty,
+  newVal?: any,
+) {
+  ref = toRaw(ref)
+  const dep = ref.dep
+  if (dep) {
+    triggerEffects(
+      dep,
+      dirtyLevel,
+      __DEV__
+        ? {
+            target: ref,
+            type: TriggerOpTypes.SET,
+            key: 'value',
+            newValue: newVal,
+          }
+        : void 0,
+    )
+  }
+}
+
+/**
+ * Checks if a value is a ref object.
+ *
+ * @param r - The value to inspect.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#isref}
+ */
+export function isRef<T>(r: Ref<T> | unknown): r is Ref<T>
+export function isRef(r: any): r is Ref {
+  return !!(r && r.__v_isRef === true)
+}
+
+/**
+ * Takes an inner value and returns a reactive and mutable ref object, which
+ * has a single property `.value` that points to the inner value.
+ *
+ * @param value - The object to wrap in the ref.
+ * @see {@link https://vuejs.org/api/reactivity-core.html#ref}
+ */
+export function ref<T>(value: T): Ref<UnwrapRef<T>>
+export function ref<T = any>(): Ref<T | undefined>
+export function ref(value?: unknown) {
+  return createRef(value, false)
+}
+
+declare const ShallowRefMarker: unique symbol
+
+export type ShallowRef<T = any> = Ref<T> & { [ShallowRefMarker]?: true }
+
+/**
+ * Shallow version of {@link ref()}.
+ *
+ * @example
+ * ```js
+ * const state = shallowRef({ count: 1 })
+ *
+ * // does NOT trigger change
+ * state.value.count = 2
+ *
+ * // does trigger change
+ * state.value = { count: 2 }
+ * ```
+ *
+ * @param value - The "inner value" for the shallow ref.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#shallowref}
+ */
+export function shallowRef<T>(
+  value: T,
+): Ref extends T
+  ? T extends Ref
+    ? IfAny<T, ShallowRef<T>, T>
+    : ShallowRef<T>
+  : ShallowRef<T>
+export function shallowRef<T = any>(): ShallowRef<T | undefined>
+export function shallowRef(value?: unknown) {
+  return createRef(value, true)
+}
+
+function createRef(rawValue: unknown, shallow: boolean) {
+  if (isRef(rawValue)) {
+    return rawValue
+  }
+  return new RefImpl(rawValue, shallow)
+}
+
+class RefImpl<T> {
+  private _value: T
+  private _rawValue: T
+
+  public dep?: Dep = undefined
+  public readonly __v_isRef = true
+
+  constructor(
+    value: T,
+    public readonly __v_isShallow: boolean,
+  ) {
+    this._rawValue = __v_isShallow ? value : toRaw(value)
+    this._value = __v_isShallow ? value : toReactive(value)
+  }
+
+  get value() {
+    trackRefValue(this)
+    return this._value
+  }
+
+  set value(newVal) {
+    const useDirectValue =
+      this.__v_isShallow || isShallow(newVal) || isReadonly(newVal)
+    newVal = useDirectValue ? newVal : toRaw(newVal)
+    if (hasChanged(newVal, this._rawValue)) {
+      this._rawValue = newVal
+      this._value = useDirectValue ? newVal : toReactive(newVal)
+      triggerRefValue(this, DirtyLevels.Dirty, newVal)
+    }
+  }
+}
+
+/**
+ * Force trigger effects that depends on a shallow ref. This is typically used
+ * after making deep mutations to the inner value of a shallow ref.
+ *
+ * @example
+ * ```js
+ * const shallow = shallowRef({
+ *   greet: 'Hello, world'
+ * })
+ *
+ * // Logs "Hello, world" once for the first run-through
+ * watchEffect(() => {
+ *   console.log(shallow.value.greet)
+ * })
+ *
+ * // This won't trigger the effect because the ref is shallow
+ * shallow.value.greet = 'Hello, universe'
+ *
+ * // Logs "Hello, universe"
+ * triggerRef(shallow)
+ * ```
+ *
+ * @param ref - The ref whose tied effects shall be executed.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#triggerref}
+ */
+export function triggerRef(ref: Ref) {
+  triggerRefValue(ref, DirtyLevels.Dirty, __DEV__ ? ref.value : void 0)
+}
+
+export type MaybeRef<T = any> = T | Ref<T>
+export type MaybeRefOrGetter<T = any> = MaybeRef<T> | (() => T)
+
+/**
+ * Returns the inner value if the argument is a ref, otherwise return the
+ * argument itself. This is a sugar function for
+ * `val = isRef(val) ? val.value : val`.
+ *
+ * @example
+ * ```js
+ * function useFoo(x: number | Ref<number>) {
+ *   const unwrapped = unref(x)
+ *   // unwrapped is guaranteed to be number now
+ * }
+ * ```
+ *
+ * @param ref - Ref or plain value to be converted into the plain value.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#unref}
+ */
+export function unref<T>(ref: MaybeRef<T> | ComputedRef<T>): T {
+  return isRef(ref) ? ref.value : ref
+}
+
+/**
+ * Normalizes values / refs / getters to values.
+ * This is similar to {@link unref()}, except that it also normalizes getters.
+ * If the argument is a getter, it will be invoked and its return value will
+ * be returned.
+ *
+ * @example
+ * ```js
+ * toValue(1) // 1
+ * toValue(ref(1)) // 1
+ * toValue(() => 1) // 1
+ * ```
+ *
+ * @param source - A getter, an existing ref, or a non-function value.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#tovalue}
+ */
+export function toValue<T>(source: MaybeRefOrGetter<T> | ComputedRef<T>): T {
+  return isFunction(source) ? source() : unref(source)
+}
+
+const shallowUnwrapHandlers: ProxyHandler<any> = {
+  get: (target, key, receiver) => unref(Reflect.get(target, key, receiver)),
+  set: (target, key, value, receiver) => {
+    const oldValue = target[key]
+    if (isRef(oldValue) && !isRef(value)) {
+      oldValue.value = value
+      return true
+    } else {
+      return Reflect.set(target, key, value, receiver)
+    }
+  },
+}
+
+/**
+ * Returns a reactive proxy for the given object.
+ *
+ * If the object already is reactive, it's returned as-is. If not, a new
+ * reactive proxy is created. Direct child properties that are refs are properly
+ * handled, as well.
+ *
+ * @param objectWithRefs - Either an already-reactive object or a simple object
+ * that contains refs.
+ */
+export function proxyRefs<T extends object>(
+  objectWithRefs: T,
+): ShallowUnwrapRef<T> {
+  return isReactive(objectWithRefs)
+    ? objectWithRefs
+    : new Proxy(objectWithRefs, shallowUnwrapHandlers)
+}
+
+export type CustomRefFactory<T> = (
+  track: () => void,
+  trigger: () => void,
+) => {
+  get: () => T
+  set: (value: T) => void
+}
+
+class CustomRefImpl<T> {
+  public dep?: Dep = undefined
+
+  private readonly _get: ReturnType<CustomRefFactory<T>>['get']
+  private readonly _set: ReturnType<CustomRefFactory<T>>['set']
+
+  public readonly __v_isRef = true
+
+  constructor(factory: CustomRefFactory<T>) {
+    const { get, set } = factory(
+      () => trackRefValue(this),
+      () => triggerRefValue(this),
+    )
+    this._get = get
+    this._set = set
+  }
+
+  get value() {
+    return this._get()
+  }
+
+  set value(newVal) {
+    this._set(newVal)
+  }
+}
+
+/**
+ * Creates a customized ref with explicit control over its dependency tracking
+ * and updates triggering.
+ *
+ * @param factory - The function that receives the `track` and `trigger` callbacks.
+ * @see {@link https://vuejs.org/api/reactivity-advanced.html#customref}
+ */
+export function customRef<T>(factory: CustomRefFactory<T>): Ref<T> {
+  return new CustomRefImpl(factory) as any
+}
+
+export type ToRefs<T = any> = {
+  [K in keyof T]: ToRef<T[K]>
+}
+
+/**
+ * Converts a reactive object to a plain object where each property of the
+ * resulting object is a ref pointing to the corresponding property of the
+ * original object. Each individual ref is created using {@link toRef()}.
+ *
+ * @param object - Reactive object to be made into an object of linked refs.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#torefs}
+ */
+export function toRefs<T extends object>(object: T): ToRefs<T> {
+  if (__DEV__ && !isProxy(object)) {
+    warn(`toRefs() expects a reactive object but received a plain one.`)
+  }
+  const ret: any = isArray(object) ? new Array(object.length) : {}
+  for (const key in object) {
+    ret[key] = propertyToRef(object, key)
+  }
+  return ret
+}
+
+class ObjectRefImpl<T extends object, K extends keyof T> {
+  public readonly __v_isRef = true
+
+  constructor(
+    private readonly _object: T,
+    private readonly _key: K,
+    private readonly _defaultValue?: T[K],
+  ) {}
+
+  get value() {
+    const val = this._object[this._key]
+    return val === undefined ? this._defaultValue! : val
+  }
+
+  set value(newVal) {
+    this._object[this._key] = newVal
+  }
+
+  get dep(): Dep | undefined {
+    return getDepFromReactive(toRaw(this._object), this._key)
+  }
+}
+
+class GetterRefImpl<T> {
+  public readonly __v_isRef = true
+  public readonly __v_isReadonly = true
+  constructor(private readonly _getter: () => T) {}
+  get value() {
+    return this._getter()
+  }
+}
+
+export type ToRef<T> = IfAny<T, Ref<T>, [T] extends [Ref] ? T : Ref<T>>
+
+/**
+ * Used to normalize values / refs / getters into refs.
+ *
+ * @example
+ * ```js
+ * // returns existing refs as-is
+ * toRef(existingRef)
+ *
+ * // creates a ref that calls the getter on .value access
+ * toRef(() => props.foo)
+ *
+ * // creates normal refs from non-function values
+ * // equivalent to ref(1)
+ * toRef(1)
+ * ```
+ *
+ * Can also be used to create a ref for a property on a source reactive object.
+ * The created ref is synced with its source property: mutating the source
+ * property will update the ref, and vice-versa.
+ *
+ * @example
+ * ```js
+ * const state = reactive({
+ *   foo: 1,
+ *   bar: 2
+ * })
+ *
+ * const fooRef = toRef(state, 'foo')
+ *
+ * // mutating the ref updates the original
+ * fooRef.value++
+ * console.log(state.foo) // 2
+ *
+ * // mutating the original also updates the ref
+ * state.foo++
+ * console.log(fooRef.value) // 3
+ * ```
+ *
+ * @param source - A getter, an existing ref, a non-function value, or a
+ *                 reactive object to create a property ref from.
+ * @param [key] - (optional) Name of the property in the reactive object.
+ * @see {@link https://vuejs.org/api/reactivity-utilities.html#toref}
+ */
+export function toRef<T>(
+  value: T,
+): T extends () => infer R
+  ? Readonly<Ref<R>>
+  : T extends Ref
+    ? T
+    : Ref<UnwrapRef<T>>
+export function toRef<T extends object, K extends keyof T>(
+  object: T,
+  key: K,
+): ToRef<T[K]>
+export function toRef<T extends object, K extends keyof T>(
+  object: T,
+  key: K,
+  defaultValue: T[K],
+): ToRef<Exclude<T[K], undefined>>
+export function toRef(
+  source: Record<string, any> | MaybeRef,
+  key?: string,
+  defaultValue?: unknown,
+): Ref {
+  if (isRef(source)) {
+    return source
+  } else if (isFunction(source)) {
+    return new GetterRefImpl(source) as any
+  } else if (isObject(source) && arguments.length > 1) {
+    return propertyToRef(source, key!, defaultValue)
+  } else {
+    return ref(source)
+  }
+}
+
+function propertyToRef(
+  source: Record<string, any>,
+  key: string,
+  defaultValue?: unknown,
+) {
+  const val = source[key]
+  return isRef(val)
+    ? val
+    : (new ObjectRefImpl(source, key, defaultValue) as any)
+}
+
+// corner case when use narrows type
+// Ex. type RelativePath = string & { __brand: unknown }
+// RelativePath extends object -> true
+type BaseTypes = string | number | boolean
+
+/**
+ * This is a special exported interface for other packages to declare
+ * additional types that should bail out for ref unwrapping. For example
+ * \@vue/runtime-dom can declare it like so in its d.ts:
+ *
+ * ``` ts
+ * declare module '@vue/reactivity' {
+ *   export interface RefUnwrapBailTypes {
+ *     runtimeDOMBailTypes: Node | Window
+ *   }
+ * }
+ * ```
+ */
+export interface RefUnwrapBailTypes {}
+
+export type ShallowUnwrapRef<T> = {
+  [K in keyof T]: DistrubuteRef<T[K]>
+}
+
+type DistrubuteRef<T> = T extends Ref<infer V> ? V : T
+
+export type UnwrapRef<T> =
+  T extends ShallowRef<infer V>
+    ? V
+    : T extends Ref<infer V>
+      ? UnwrapRefSimple<V>
+      : UnwrapRefSimple<T>
+
+export type UnwrapRefSimple<T> = T extends
+  | Function
+  | BaseTypes
+  | Ref
+  | RefUnwrapBailTypes[keyof RefUnwrapBailTypes]
+  | { [RawSymbol]?: true }
+  ? T
+  : T extends Map<infer K, infer V>
+    ? Map<K, UnwrapRefSimple<V>> & UnwrapRef<Omit<T, keyof Map<any, any>>>
+    : T extends WeakMap<infer K, infer V>
+      ? WeakMap<K, UnwrapRefSimple<V>> &
+          UnwrapRef<Omit<T, keyof WeakMap<any, any>>>
+      : T extends Set<infer V>
+        ? Set<UnwrapRefSimple<V>> & UnwrapRef<Omit<T, keyof Set<any>>>
+        : T extends WeakSet<infer V>
+          ? WeakSet<UnwrapRefSimple<V>> & UnwrapRef<Omit<T, keyof WeakSet<any>>>
+          : T extends ReadonlyArray<any>
+            ? { [K in keyof T]: UnwrapRefSimple<T[K]> }
+            : T extends object & { [ShallowReactiveMarker]?: never }
+              ? {
+                  [P in keyof T]: P extends symbol ? T[P] : UnwrapRef<T[P]>
+                }
+              : T
+
+=== End/Start of File ===
+File: reactivity/src/warning.ts
+export function warn(msg: string, ...args: any[]) {
+  console.warn(`[Vue warn] ${msg}`, ...args)
+}
+
+=== End/Start of File ===

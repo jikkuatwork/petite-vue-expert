@@ -1,0 +1,4418 @@
+Cocat - File Concatenation Tool
+Generated on: 2024-05-10 11:04:02 +0530
+
+Directory Structure:
+.
+├── index.js
+├── LICENSE
+├── package.json
+├── README.md
+└── src
+    ├── apiCustomElement.ts
+    ├── components
+    │   ├── TransitionGroup.ts
+    │   └── Transition.ts
+    ├── directives
+    │   ├── vModel.ts
+    │   ├── vOn.ts
+    │   └── vShow.ts
+    ├── helpers
+    │   ├── useCssModule.ts
+    │   └── useCssVars.ts
+    ├── index.ts
+    ├── jsx.ts
+    ├── modules
+    │   ├── attrs.ts
+    │   ├── class.ts
+    │   ├── events.ts
+    │   ├── props.ts
+    │   └── style.ts
+    ├── nodeOps.ts
+    └── patchProp.ts
+
+5 directories, 21 files
+
+=== End/Start of File ===
+File: ./LICENSE
+The MIT License (MIT)
+
+Copyright (c) 2018-present, Yuxi (Evan) You
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+=== End/Start of File ===
+File: ./README.md
+# @vue/runtime-dom
+
+``` js
+import { h, createApp } from '@vue/runtime-dom'
+
+const RootComponent = {
+  render() {
+    return h('div', 'hello world')
+  }
+}
+
+createApp(RootComponent).mount('#app')
+```
+
+=== End/Start of File ===
+File: ./index.js
+'use strict'
+
+if (process.env.NODE_ENV === 'production') {
+  module.exports = require('./dist/runtime-dom.cjs.prod.js')
+} else {
+  module.exports = require('./dist/runtime-dom.cjs.js')
+}
+
+=== End/Start of File ===
+File: ./package.json
+{
+  "name": "@vue/runtime-dom",
+  "version": "3.4.27",
+  "description": "@vue/runtime-dom",
+  "main": "index.js",
+  "module": "dist/runtime-dom.esm-bundler.js",
+  "types": "dist/runtime-dom.d.ts",
+  "unpkg": "dist/runtime-dom.global.js",
+  "files": [
+    "index.js",
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/runtime-dom.d.ts",
+      "node": {
+        "production": "./dist/runtime-dom.cjs.prod.js",
+        "development": "./dist/runtime-dom.cjs.js",
+        "default": "./index.js"
+      },
+      "module": "./dist/runtime-dom.esm-bundler.js",
+      "import": "./dist/runtime-dom.esm-bundler.js",
+      "require": "./index.js"
+    },
+    "./*": "./*"
+  },
+  "sideEffects": false,
+  "buildOptions": {
+    "name": "VueRuntimeDOM",
+    "formats": [
+      "esm-bundler",
+      "esm-browser",
+      "cjs",
+      "global"
+    ]
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vuejs/core.git",
+    "directory": "packages/runtime-dom"
+  },
+  "keywords": [
+    "vue"
+  ],
+  "author": "Evan You",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/vuejs/core/issues"
+  },
+  "homepage": "https://github.com/vuejs/core/tree/main/packages/runtime-dom#readme",
+  "dependencies": {
+    "@vue/shared": "workspace:*",
+    "@vue/runtime-core": "workspace:*",
+    "csstype": "^3.1.3"
+  }
+}
+
+=== End/Start of File ===
+File: ./src/apiCustomElement.ts
+import {
+  type ComponentInjectOptions,
+  type ComponentInternalInstance,
+  type ComponentOptions,
+  type ComponentOptionsMixin,
+  type ComponentOptionsWithArrayProps,
+  type ComponentOptionsWithObjectProps,
+  type ComponentOptionsWithoutProps,
+  type ComponentPropsOptions,
+  type ComputedOptions,
+  type ConcreteComponent,
+  type DefineComponent,
+  type EmitsOptions,
+  type ExtractPropTypes,
+  type MethodOptions,
+  type RenderFunction,
+  type RootHydrateFunction,
+  type SetupContext,
+  type SlotsType,
+  type VNode,
+  createVNode,
+  defineComponent,
+  nextTick,
+  warn,
+} from '@vue/runtime-core'
+import { camelize, extend, hyphenate, isArray, toNumber } from '@vue/shared'
+import { hydrate, render } from '.'
+
+export type VueElementConstructor<P = {}> = {
+  new (initialProps?: Record<string, any>): VueElement & P
+}
+
+// defineCustomElement provides the same type inference as defineComponent
+// so most of the following overloads should be kept in sync w/ defineComponent.
+
+// overload 1: direct setup function
+export function defineCustomElement<Props, RawBindings = object>(
+  setup: (
+    props: Readonly<Props>,
+    ctx: SetupContext,
+  ) => RawBindings | RenderFunction,
+): VueElementConstructor<Props>
+
+// overload 2: object format with no props
+export function defineCustomElement<
+  Props = {},
+  RawBindings = {},
+  D = {},
+  C extends ComputedOptions = {},
+  M extends MethodOptions = {},
+  Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
+  Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
+  E extends EmitsOptions = EmitsOptions,
+  EE extends string = string,
+  I extends ComponentInjectOptions = {},
+  II extends string = string,
+  S extends SlotsType = {},
+>(
+  options: ComponentOptionsWithoutProps<
+    Props,
+    RawBindings,
+    D,
+    C,
+    M,
+    Mixin,
+    Extends,
+    E,
+    EE,
+    I,
+    II,
+    S
+  > & { styles?: string[] },
+): VueElementConstructor<Props>
+
+// overload 3: object format with array props declaration
+export function defineCustomElement<
+  PropNames extends string,
+  RawBindings,
+  D,
+  C extends ComputedOptions = {},
+  M extends MethodOptions = {},
+  Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
+  Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
+  E extends EmitsOptions = Record<string, any>,
+  EE extends string = string,
+  I extends ComponentInjectOptions = {},
+  II extends string = string,
+  S extends SlotsType = {},
+>(
+  options: ComponentOptionsWithArrayProps<
+    PropNames,
+    RawBindings,
+    D,
+    C,
+    M,
+    Mixin,
+    Extends,
+    E,
+    EE,
+    I,
+    II,
+    S
+  > & { styles?: string[] },
+): VueElementConstructor<{ [K in PropNames]: any }>
+
+// overload 4: object format with object props declaration
+export function defineCustomElement<
+  PropsOptions extends Readonly<ComponentPropsOptions>,
+  RawBindings,
+  D,
+  C extends ComputedOptions = {},
+  M extends MethodOptions = {},
+  Mixin extends ComponentOptionsMixin = ComponentOptionsMixin,
+  Extends extends ComponentOptionsMixin = ComponentOptionsMixin,
+  E extends EmitsOptions = Record<string, any>,
+  EE extends string = string,
+  I extends ComponentInjectOptions = {},
+  II extends string = string,
+  S extends SlotsType = {},
+>(
+  options: ComponentOptionsWithObjectProps<
+    PropsOptions,
+    RawBindings,
+    D,
+    C,
+    M,
+    Mixin,
+    Extends,
+    E,
+    EE,
+    I,
+    II,
+    S
+  > & { styles?: string[] },
+): VueElementConstructor<ExtractPropTypes<PropsOptions>>
+
+// overload 5: defining a custom element from the returned value of
+// `defineComponent`
+export function defineCustomElement<P>(
+  options: DefineComponent<P, any, any, any>,
+): VueElementConstructor<ExtractPropTypes<P>>
+
+/*! #__NO_SIDE_EFFECTS__ */
+export function defineCustomElement(
+  options: any,
+  hydrate?: RootHydrateFunction,
+): VueElementConstructor {
+  const Comp = defineComponent(options) as any
+  class VueCustomElement extends VueElement {
+    static def = Comp
+    constructor(initialProps?: Record<string, any>) {
+      super(Comp, initialProps, hydrate)
+    }
+  }
+
+  return VueCustomElement
+}
+
+/*! #__NO_SIDE_EFFECTS__ */
+export const defineSSRCustomElement = ((options: any) => {
+  // @ts-expect-error
+  return defineCustomElement(options, hydrate)
+}) as typeof defineCustomElement
+
+const BaseClass = (
+  typeof HTMLElement !== 'undefined' ? HTMLElement : class {}
+) as typeof HTMLElement
+
+type InnerComponentDef = ConcreteComponent & { styles?: string[] }
+
+export class VueElement extends BaseClass {
+  /**
+   * @internal
+   */
+  _instance: ComponentInternalInstance | null = null
+
+  private _connected = false
+  private _resolved = false
+  private _numberProps: Record<string, true> | null = null
+  private _styles?: HTMLStyleElement[]
+  private _ob?: MutationObserver | null = null
+  constructor(
+    private _def: InnerComponentDef,
+    private _props: Record<string, any> = {},
+    hydrate?: RootHydrateFunction,
+  ) {
+    super()
+    if (this.shadowRoot && hydrate) {
+      hydrate(this._createVNode(), this.shadowRoot)
+    } else {
+      if (__DEV__ && this.shadowRoot) {
+        warn(
+          `Custom element has pre-rendered declarative shadow root but is not ` +
+            `defined as hydratable. Use \`defineSSRCustomElement\`.`,
+        )
+      }
+      this.attachShadow({ mode: 'open' })
+      if (!(this._def as ComponentOptions).__asyncLoader) {
+        // for sync component defs we can immediately resolve props
+        this._resolveProps(this._def)
+      }
+    }
+  }
+
+  connectedCallback() {
+    this._connected = true
+    if (!this._instance) {
+      if (this._resolved) {
+        this._update()
+      } else {
+        this._resolveDef()
+      }
+    }
+  }
+
+  disconnectedCallback() {
+    this._connected = false
+    if (this._ob) {
+      this._ob.disconnect()
+      this._ob = null
+    }
+    nextTick(() => {
+      if (!this._connected) {
+        render(null, this.shadowRoot!)
+        this._instance = null
+      }
+    })
+  }
+
+  /**
+   * resolve inner component definition (handle possible async component)
+   */
+  private _resolveDef() {
+    this._resolved = true
+
+    // set initial attrs
+    for (let i = 0; i < this.attributes.length; i++) {
+      this._setAttr(this.attributes[i].name)
+    }
+
+    // watch future attr changes
+    this._ob = new MutationObserver(mutations => {
+      for (const m of mutations) {
+        this._setAttr(m.attributeName!)
+      }
+    })
+
+    this._ob.observe(this, { attributes: true })
+
+    const resolve = (def: InnerComponentDef, isAsync = false) => {
+      const { props, styles } = def
+
+      // cast Number-type props set before resolve
+      let numberProps
+      if (props && !isArray(props)) {
+        for (const key in props) {
+          const opt = props[key]
+          if (opt === Number || (opt && opt.type === Number)) {
+            if (key in this._props) {
+              this._props[key] = toNumber(this._props[key])
+            }
+            ;(numberProps || (numberProps = Object.create(null)))[
+              camelize(key)
+            ] = true
+          }
+        }
+      }
+      this._numberProps = numberProps
+
+      if (isAsync) {
+        // defining getter/setters on prototype
+        // for sync defs, this already happened in the constructor
+        this._resolveProps(def)
+      }
+
+      // apply CSS
+      this._applyStyles(styles)
+
+      // initial render
+      this._update()
+    }
+
+    const asyncDef = (this._def as ComponentOptions).__asyncLoader
+    if (asyncDef) {
+      asyncDef().then(def => resolve(def, true))
+    } else {
+      resolve(this._def)
+    }
+  }
+
+  private _resolveProps(def: InnerComponentDef) {
+    const { props } = def
+    const declaredPropKeys = isArray(props) ? props : Object.keys(props || {})
+
+    // check if there are props set pre-upgrade or connect
+    for (const key of Object.keys(this)) {
+      if (key[0] !== '_' && declaredPropKeys.includes(key)) {
+        this._setProp(key, this[key as keyof this], true, false)
+      }
+    }
+
+    // defining getter/setters on prototype
+    for (const key of declaredPropKeys.map(camelize)) {
+      Object.defineProperty(this, key, {
+        get() {
+          return this._getProp(key)
+        },
+        set(val) {
+          this._setProp(key, val)
+        },
+      })
+    }
+  }
+
+  protected _setAttr(key: string) {
+    let value = this.hasAttribute(key) ? this.getAttribute(key) : undefined
+    const camelKey = camelize(key)
+    if (this._numberProps && this._numberProps[camelKey]) {
+      value = toNumber(value)
+    }
+    this._setProp(camelKey, value, false)
+  }
+
+  /**
+   * @internal
+   */
+  protected _getProp(key: string) {
+    return this._props[key]
+  }
+
+  /**
+   * @internal
+   */
+  protected _setProp(
+    key: string,
+    val: any,
+    shouldReflect = true,
+    shouldUpdate = true,
+  ) {
+    if (val !== this._props[key]) {
+      this._props[key] = val
+      if (shouldUpdate && this._instance) {
+        this._update()
+      }
+      // reflect
+      if (shouldReflect) {
+        if (val === true) {
+          this.setAttribute(hyphenate(key), '')
+        } else if (typeof val === 'string' || typeof val === 'number') {
+          this.setAttribute(hyphenate(key), val + '')
+        } else if (!val) {
+          this.removeAttribute(hyphenate(key))
+        }
+      }
+    }
+  }
+
+  private _update() {
+    render(this._createVNode(), this.shadowRoot!)
+  }
+
+  private _createVNode(): VNode<any, any> {
+    const vnode = createVNode(this._def, extend({}, this._props))
+    if (!this._instance) {
+      vnode.ce = instance => {
+        this._instance = instance
+        instance.isCE = true
+        // HMR
+        if (__DEV__) {
+          instance.ceReload = newStyles => {
+            // always reset styles
+            if (this._styles) {
+              this._styles.forEach(s => this.shadowRoot!.removeChild(s))
+              this._styles.length = 0
+            }
+            this._applyStyles(newStyles)
+            this._instance = null
+            this._update()
+          }
+        }
+
+        const dispatch = (event: string, args: any[]) => {
+          this.dispatchEvent(
+            new CustomEvent(event, {
+              detail: args,
+            }),
+          )
+        }
+
+        // intercept emit
+        instance.emit = (event: string, ...args: any[]) => {
+          // dispatch both the raw and hyphenated versions of an event
+          // to match Vue behavior
+          dispatch(event, args)
+          if (hyphenate(event) !== event) {
+            dispatch(hyphenate(event), args)
+          }
+        }
+
+        // locate nearest Vue custom element parent for provide/inject
+        let parent: Node | null = this
+        while (
+          (parent =
+            parent && (parent.parentNode || (parent as ShadowRoot).host))
+        ) {
+          if (parent instanceof VueElement) {
+            instance.parent = parent._instance
+            instance.provides = parent._instance!.provides
+            break
+          }
+        }
+      }
+    }
+    return vnode
+  }
+
+  private _applyStyles(styles: string[] | undefined) {
+    if (styles) {
+      styles.forEach(css => {
+        const s = document.createElement('style')
+        s.textContent = css
+        this.shadowRoot!.appendChild(s)
+        // record for HMR
+        if (__DEV__) {
+          ;(this._styles || (this._styles = [])).push(s)
+        }
+      })
+    }
+  }
+}
+
+=== End/Start of File ===
+File: ./src/components/Transition.ts
+import {
+  BaseTransition,
+  type BaseTransitionProps,
+  BaseTransitionPropsValidators,
+  DeprecationTypes,
+  type FunctionalComponent,
+  assertNumber,
+  compatUtils,
+  h,
+} from '@vue/runtime-core'
+import { extend, isArray, isObject, toNumber } from '@vue/shared'
+
+const TRANSITION = 'transition'
+const ANIMATION = 'animation'
+
+type AnimationTypes = typeof TRANSITION | typeof ANIMATION
+
+export interface TransitionProps extends BaseTransitionProps<Element> {
+  name?: string
+  type?: AnimationTypes
+  css?: boolean
+  duration?: number | { enter: number; leave: number }
+  // custom transition classes
+  enterFromClass?: string
+  enterActiveClass?: string
+  enterToClass?: string
+  appearFromClass?: string
+  appearActiveClass?: string
+  appearToClass?: string
+  leaveFromClass?: string
+  leaveActiveClass?: string
+  leaveToClass?: string
+}
+
+export const vtcKey = Symbol('_vtc')
+
+export interface ElementWithTransition extends HTMLElement {
+  // _vtc = Vue Transition Classes.
+  // Store the temporarily-added transition classes on the element
+  // so that we can avoid overwriting them if the element's class is patched
+  // during the transition.
+  [vtcKey]?: Set<string>
+}
+
+// DOM Transition is a higher-order-component based on the platform-agnostic
+// base Transition component, with DOM-specific logic.
+export const Transition: FunctionalComponent<TransitionProps> = (
+  props,
+  { slots },
+) => h(BaseTransition, resolveTransitionProps(props), slots)
+
+Transition.displayName = 'Transition'
+
+if (__COMPAT__) {
+  Transition.__isBuiltIn = true
+}
+
+const DOMTransitionPropsValidators = {
+  name: String,
+  type: String,
+  css: {
+    type: Boolean,
+    default: true,
+  },
+  duration: [String, Number, Object],
+  enterFromClass: String,
+  enterActiveClass: String,
+  enterToClass: String,
+  appearFromClass: String,
+  appearActiveClass: String,
+  appearToClass: String,
+  leaveFromClass: String,
+  leaveActiveClass: String,
+  leaveToClass: String,
+}
+
+export const TransitionPropsValidators = (Transition.props =
+  /*#__PURE__*/ extend(
+    {},
+    BaseTransitionPropsValidators as any,
+    DOMTransitionPropsValidators,
+  ))
+
+/**
+ * #3227 Incoming hooks may be merged into arrays when wrapping Transition
+ * with custom HOCs.
+ */
+const callHook = (
+  hook: Function | Function[] | undefined,
+  args: any[] = [],
+) => {
+  if (isArray(hook)) {
+    hook.forEach(h => h(...args))
+  } else if (hook) {
+    hook(...args)
+  }
+}
+
+/**
+ * Check if a hook expects a callback (2nd arg), which means the user
+ * intends to explicitly control the end of the transition.
+ */
+const hasExplicitCallback = (
+  hook: Function | Function[] | undefined,
+): boolean => {
+  return hook
+    ? isArray(hook)
+      ? hook.some(h => h.length > 1)
+      : hook.length > 1
+    : false
+}
+
+export function resolveTransitionProps(
+  rawProps: TransitionProps,
+): BaseTransitionProps<Element> {
+  const baseProps: BaseTransitionProps<Element> = {}
+  for (const key in rawProps) {
+    if (!(key in DOMTransitionPropsValidators)) {
+      ;(baseProps as any)[key] = (rawProps as any)[key]
+    }
+  }
+
+  if (rawProps.css === false) {
+    return baseProps
+  }
+
+  const {
+    name = 'v',
+    type,
+    duration,
+    enterFromClass = `${name}-enter-from`,
+    enterActiveClass = `${name}-enter-active`,
+    enterToClass = `${name}-enter-to`,
+    appearFromClass = enterFromClass,
+    appearActiveClass = enterActiveClass,
+    appearToClass = enterToClass,
+    leaveFromClass = `${name}-leave-from`,
+    leaveActiveClass = `${name}-leave-active`,
+    leaveToClass = `${name}-leave-to`,
+  } = rawProps
+
+  // legacy transition class compat
+  const legacyClassEnabled =
+    __COMPAT__ &&
+    compatUtils.isCompatEnabled(DeprecationTypes.TRANSITION_CLASSES, null)
+  let legacyEnterFromClass: string
+  let legacyAppearFromClass: string
+  let legacyLeaveFromClass: string
+  if (__COMPAT__ && legacyClassEnabled) {
+    const toLegacyClass = (cls: string) => cls.replace(/-from$/, '')
+    if (!rawProps.enterFromClass) {
+      legacyEnterFromClass = toLegacyClass(enterFromClass)
+    }
+    if (!rawProps.appearFromClass) {
+      legacyAppearFromClass = toLegacyClass(appearFromClass)
+    }
+    if (!rawProps.leaveFromClass) {
+      legacyLeaveFromClass = toLegacyClass(leaveFromClass)
+    }
+  }
+
+  const durations = normalizeDuration(duration)
+  const enterDuration = durations && durations[0]
+  const leaveDuration = durations && durations[1]
+  const {
+    onBeforeEnter,
+    onEnter,
+    onEnterCancelled,
+    onLeave,
+    onLeaveCancelled,
+    onBeforeAppear = onBeforeEnter,
+    onAppear = onEnter,
+    onAppearCancelled = onEnterCancelled,
+  } = baseProps
+
+  const finishEnter = (el: Element, isAppear: boolean, done?: () => void) => {
+    removeTransitionClass(el, isAppear ? appearToClass : enterToClass)
+    removeTransitionClass(el, isAppear ? appearActiveClass : enterActiveClass)
+    done && done()
+  }
+
+  const finishLeave = (
+    el: Element & { _isLeaving?: boolean },
+    done?: () => void,
+  ) => {
+    el._isLeaving = false
+    removeTransitionClass(el, leaveFromClass)
+    removeTransitionClass(el, leaveToClass)
+    removeTransitionClass(el, leaveActiveClass)
+    done && done()
+  }
+
+  const makeEnterHook = (isAppear: boolean) => {
+    return (el: Element, done: () => void) => {
+      const hook = isAppear ? onAppear : onEnter
+      const resolve = () => finishEnter(el, isAppear, done)
+      callHook(hook, [el, resolve])
+      nextFrame(() => {
+        removeTransitionClass(el, isAppear ? appearFromClass : enterFromClass)
+        if (__COMPAT__ && legacyClassEnabled) {
+          const legacyClass = isAppear
+            ? legacyAppearFromClass
+            : legacyEnterFromClass
+          if (legacyClass) {
+            removeTransitionClass(el, legacyClass)
+          }
+        }
+        addTransitionClass(el, isAppear ? appearToClass : enterToClass)
+        if (!hasExplicitCallback(hook)) {
+          whenTransitionEnds(el, type, enterDuration, resolve)
+        }
+      })
+    }
+  }
+
+  return extend(baseProps, {
+    onBeforeEnter(el) {
+      callHook(onBeforeEnter, [el])
+      addTransitionClass(el, enterFromClass)
+      if (__COMPAT__ && legacyClassEnabled && legacyEnterFromClass) {
+        addTransitionClass(el, legacyEnterFromClass)
+      }
+      addTransitionClass(el, enterActiveClass)
+    },
+    onBeforeAppear(el) {
+      callHook(onBeforeAppear, [el])
+      addTransitionClass(el, appearFromClass)
+      if (__COMPAT__ && legacyClassEnabled && legacyAppearFromClass) {
+        addTransitionClass(el, legacyAppearFromClass)
+      }
+      addTransitionClass(el, appearActiveClass)
+    },
+    onEnter: makeEnterHook(false),
+    onAppear: makeEnterHook(true),
+    onLeave(el: Element & { _isLeaving?: boolean }, done) {
+      el._isLeaving = true
+      const resolve = () => finishLeave(el, done)
+      addTransitionClass(el, leaveFromClass)
+      if (__COMPAT__ && legacyClassEnabled && legacyLeaveFromClass) {
+        addTransitionClass(el, legacyLeaveFromClass)
+      }
+      // add *-leave-active class before reflow so in the case of a cancelled enter transition
+      // the css will not get the final state (#10677)
+      addTransitionClass(el, leaveActiveClass)
+      // force reflow so *-leave-from classes immediately take effect (#2593)
+      forceReflow()
+      nextFrame(() => {
+        if (!el._isLeaving) {
+          // cancelled
+          return
+        }
+        removeTransitionClass(el, leaveFromClass)
+        if (__COMPAT__ && legacyClassEnabled && legacyLeaveFromClass) {
+          removeTransitionClass(el, legacyLeaveFromClass)
+        }
+        addTransitionClass(el, leaveToClass)
+        if (!hasExplicitCallback(onLeave)) {
+          whenTransitionEnds(el, type, leaveDuration, resolve)
+        }
+      })
+      callHook(onLeave, [el, resolve])
+    },
+    onEnterCancelled(el) {
+      finishEnter(el, false)
+      callHook(onEnterCancelled, [el])
+    },
+    onAppearCancelled(el) {
+      finishEnter(el, true)
+      callHook(onAppearCancelled, [el])
+    },
+    onLeaveCancelled(el) {
+      finishLeave(el)
+      callHook(onLeaveCancelled, [el])
+    },
+  } as BaseTransitionProps<Element>)
+}
+
+function normalizeDuration(
+  duration: TransitionProps['duration'],
+): [number, number] | null {
+  if (duration == null) {
+    return null
+  } else if (isObject(duration)) {
+    return [NumberOf(duration.enter), NumberOf(duration.leave)]
+  } else {
+    const n = NumberOf(duration)
+    return [n, n]
+  }
+}
+
+function NumberOf(val: unknown): number {
+  const res = toNumber(val)
+  if (__DEV__) {
+    assertNumber(res, '<transition> explicit duration')
+  }
+  return res
+}
+
+export function addTransitionClass(el: Element, cls: string) {
+  cls.split(/\s+/).forEach(c => c && el.classList.add(c))
+  ;(
+    (el as ElementWithTransition)[vtcKey] ||
+    ((el as ElementWithTransition)[vtcKey] = new Set())
+  ).add(cls)
+}
+
+export function removeTransitionClass(el: Element, cls: string) {
+  cls.split(/\s+/).forEach(c => c && el.classList.remove(c))
+  const _vtc = (el as ElementWithTransition)[vtcKey]
+  if (_vtc) {
+    _vtc.delete(cls)
+    if (!_vtc!.size) {
+      ;(el as ElementWithTransition)[vtcKey] = undefined
+    }
+  }
+}
+
+function nextFrame(cb: () => void) {
+  requestAnimationFrame(() => {
+    requestAnimationFrame(cb)
+  })
+}
+
+let endId = 0
+
+function whenTransitionEnds(
+  el: Element & { _endId?: number },
+  expectedType: TransitionProps['type'] | undefined,
+  explicitTimeout: number | null,
+  resolve: () => void,
+) {
+  const id = (el._endId = ++endId)
+  const resolveIfNotStale = () => {
+    if (id === el._endId) {
+      resolve()
+    }
+  }
+
+  if (explicitTimeout) {
+    return setTimeout(resolveIfNotStale, explicitTimeout)
+  }
+
+  const { type, timeout, propCount } = getTransitionInfo(el, expectedType)
+  if (!type) {
+    return resolve()
+  }
+
+  const endEvent = type + 'end'
+  let ended = 0
+  const end = () => {
+    el.removeEventListener(endEvent, onEnd)
+    resolveIfNotStale()
+  }
+  const onEnd = (e: Event) => {
+    if (e.target === el && ++ended >= propCount) {
+      end()
+    }
+  }
+  setTimeout(() => {
+    if (ended < propCount) {
+      end()
+    }
+  }, timeout + 1)
+  el.addEventListener(endEvent, onEnd)
+}
+
+interface CSSTransitionInfo {
+  type: AnimationTypes | null
+  propCount: number
+  timeout: number
+  hasTransform: boolean
+}
+
+type AnimationProperties = 'Delay' | 'Duration'
+type StylePropertiesKey =
+  | `${AnimationTypes}${AnimationProperties}`
+  | `${typeof TRANSITION}Property`
+
+export function getTransitionInfo(
+  el: Element,
+  expectedType?: TransitionProps['type'],
+): CSSTransitionInfo {
+  const styles = window.getComputedStyle(el) as Pick<
+    CSSStyleDeclaration,
+    StylePropertiesKey
+  >
+  // JSDOM may return undefined for transition properties
+  const getStyleProperties = (key: StylePropertiesKey) =>
+    (styles[key] || '').split(', ')
+  const transitionDelays = getStyleProperties(`${TRANSITION}Delay`)
+  const transitionDurations = getStyleProperties(`${TRANSITION}Duration`)
+  const transitionTimeout = getTimeout(transitionDelays, transitionDurations)
+  const animationDelays = getStyleProperties(`${ANIMATION}Delay`)
+  const animationDurations = getStyleProperties(`${ANIMATION}Duration`)
+  const animationTimeout = getTimeout(animationDelays, animationDurations)
+
+  let type: CSSTransitionInfo['type'] = null
+  let timeout = 0
+  let propCount = 0
+  /* istanbul ignore if */
+  if (expectedType === TRANSITION) {
+    if (transitionTimeout > 0) {
+      type = TRANSITION
+      timeout = transitionTimeout
+      propCount = transitionDurations.length
+    }
+  } else if (expectedType === ANIMATION) {
+    if (animationTimeout > 0) {
+      type = ANIMATION
+      timeout = animationTimeout
+      propCount = animationDurations.length
+    }
+  } else {
+    timeout = Math.max(transitionTimeout, animationTimeout)
+    type =
+      timeout > 0
+        ? transitionTimeout > animationTimeout
+          ? TRANSITION
+          : ANIMATION
+        : null
+    propCount = type
+      ? type === TRANSITION
+        ? transitionDurations.length
+        : animationDurations.length
+      : 0
+  }
+  const hasTransform =
+    type === TRANSITION &&
+    /\b(transform|all)(,|$)/.test(
+      getStyleProperties(`${TRANSITION}Property`).toString(),
+    )
+  return {
+    type,
+    timeout,
+    propCount,
+    hasTransform,
+  }
+}
+
+function getTimeout(delays: string[], durations: string[]): number {
+  while (delays.length < durations.length) {
+    delays = delays.concat(delays)
+  }
+  return Math.max(...durations.map((d, i) => toMs(d) + toMs(delays[i])))
+}
+
+// Old versions of Chromium (below 61.0.3163.100) formats floating pointer
+// numbers in a locale-dependent way, using a comma instead of a dot.
+// If comma is not replaced with a dot, the input will be rounded down
+// (i.e. acting as a floor function) causing unexpected behaviors
+function toMs(s: string): number {
+  // #8409 default value for CSS durations can be 'auto'
+  if (s === 'auto') return 0
+  return Number(s.slice(0, -1).replace(',', '.')) * 1000
+}
+
+// synchronously force layout to put elements into a certain state
+export function forceReflow() {
+  return document.body.offsetHeight
+}
+
+=== End/Start of File ===
+File: ./src/components/TransitionGroup.ts
+import {
+  type ElementWithTransition,
+  type TransitionProps,
+  TransitionPropsValidators,
+  addTransitionClass,
+  forceReflow,
+  getTransitionInfo,
+  removeTransitionClass,
+  resolveTransitionProps,
+  vtcKey,
+} from './Transition'
+import {
+  type ComponentOptions,
+  DeprecationTypes,
+  Fragment,
+  type SetupContext,
+  type VNode,
+  compatUtils,
+  createVNode,
+  getCurrentInstance,
+  getTransitionRawChildren,
+  onUpdated,
+  resolveTransitionHooks,
+  setTransitionHooks,
+  toRaw,
+  useTransitionState,
+  warn,
+} from '@vue/runtime-core'
+import { extend } from '@vue/shared'
+
+const positionMap = new WeakMap<VNode, DOMRect>()
+const newPositionMap = new WeakMap<VNode, DOMRect>()
+const moveCbKey = Symbol('_moveCb')
+const enterCbKey = Symbol('_enterCb')
+export type TransitionGroupProps = Omit<TransitionProps, 'mode'> & {
+  tag?: string
+  moveClass?: string
+}
+
+const TransitionGroupImpl: ComponentOptions = {
+  name: 'TransitionGroup',
+
+  props: /*#__PURE__*/ extend({}, TransitionPropsValidators, {
+    tag: String,
+    moveClass: String,
+  }),
+
+  setup(props: TransitionGroupProps, { slots }: SetupContext) {
+    const instance = getCurrentInstance()!
+    const state = useTransitionState()
+    let prevChildren: VNode[]
+    let children: VNode[]
+
+    onUpdated(() => {
+      // children is guaranteed to exist after initial render
+      if (!prevChildren.length) {
+        return
+      }
+      const moveClass = props.moveClass || `${props.name || 'v'}-move`
+
+      if (
+        !hasCSSTransform(
+          prevChildren[0].el as ElementWithTransition,
+          instance.vnode.el as Node,
+          moveClass,
+        )
+      ) {
+        return
+      }
+
+      // we divide the work into three loops to avoid mixing DOM reads and writes
+      // in each iteration - which helps prevent layout thrashing.
+      prevChildren.forEach(callPendingCbs)
+      prevChildren.forEach(recordPosition)
+      const movedChildren = prevChildren.filter(applyTranslation)
+
+      // force reflow to put everything in position
+      forceReflow()
+
+      movedChildren.forEach(c => {
+        const el = c.el as ElementWithTransition
+        const style = el.style
+        addTransitionClass(el, moveClass)
+        style.transform = style.webkitTransform = style.transitionDuration = ''
+        const cb = ((el as any)[moveCbKey] = (e: TransitionEvent) => {
+          if (e && e.target !== el) {
+            return
+          }
+          if (!e || /transform$/.test(e.propertyName)) {
+            el.removeEventListener('transitionend', cb)
+            ;(el as any)[moveCbKey] = null
+            removeTransitionClass(el, moveClass)
+          }
+        })
+        el.addEventListener('transitionend', cb)
+      })
+    })
+
+    return () => {
+      const rawProps = toRaw(props)
+      const cssTransitionProps = resolveTransitionProps(rawProps)
+      let tag = rawProps.tag || Fragment
+
+      if (
+        __COMPAT__ &&
+        !rawProps.tag &&
+        compatUtils.checkCompatEnabled(
+          DeprecationTypes.TRANSITION_GROUP_ROOT,
+          instance.parent,
+        )
+      ) {
+        tag = 'span'
+      }
+
+      prevChildren = []
+      if (children) {
+        for (let i = 0; i < children.length; i++) {
+          const child = children[i]
+          if (child.el && child.el instanceof Element) {
+            prevChildren.push(child)
+            setTransitionHooks(
+              child,
+              resolveTransitionHooks(
+                child,
+                cssTransitionProps,
+                state,
+                instance,
+              ),
+            )
+            positionMap.set(
+              child,
+              (child.el as Element).getBoundingClientRect(),
+            )
+          }
+        }
+      }
+
+      children = slots.default ? getTransitionRawChildren(slots.default()) : []
+
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i]
+        if (child.key != null) {
+          setTransitionHooks(
+            child,
+            resolveTransitionHooks(child, cssTransitionProps, state, instance),
+          )
+        } else if (__DEV__) {
+          warn(`<TransitionGroup> children must be keyed.`)
+        }
+      }
+
+      return createVNode(tag, null, children)
+    }
+  },
+}
+
+if (__COMPAT__) {
+  TransitionGroupImpl.__isBuiltIn = true
+}
+
+/**
+ * TransitionGroup does not support "mode" so we need to remove it from the
+ * props declarations, but direct delete operation is considered a side effect
+ * and will make the entire transition feature non-tree-shakeable, so we do it
+ * in a function and mark the function's invocation as pure.
+ */
+const removeMode = (props: any) => delete props.mode
+/*#__PURE__*/ removeMode(TransitionGroupImpl.props)
+
+export const TransitionGroup = TransitionGroupImpl as unknown as {
+  new (): {
+    $props: TransitionGroupProps
+  }
+}
+
+function callPendingCbs(c: VNode) {
+  const el = c.el as any
+  if (el[moveCbKey]) {
+    el[moveCbKey]()
+  }
+  if (el[enterCbKey]) {
+    el[enterCbKey]()
+  }
+}
+
+function recordPosition(c: VNode) {
+  newPositionMap.set(c, (c.el as Element).getBoundingClientRect())
+}
+
+function applyTranslation(c: VNode): VNode | undefined {
+  const oldPos = positionMap.get(c)!
+  const newPos = newPositionMap.get(c)!
+  const dx = oldPos.left - newPos.left
+  const dy = oldPos.top - newPos.top
+  if (dx || dy) {
+    const s = (c.el as HTMLElement).style
+    s.transform = s.webkitTransform = `translate(${dx}px,${dy}px)`
+    s.transitionDuration = '0s'
+    return c
+  }
+}
+
+function hasCSSTransform(
+  el: ElementWithTransition,
+  root: Node,
+  moveClass: string,
+): boolean {
+  // Detect whether an element with the move class applied has
+  // CSS transitions. Since the element may be inside an entering
+  // transition at this very moment, we make a clone of it and remove
+  // all other transition classes applied to ensure only the move class
+  // is applied.
+  const clone = el.cloneNode() as HTMLElement
+  const _vtc = el[vtcKey]
+  if (_vtc) {
+    _vtc.forEach(cls => {
+      cls.split(/\s+/).forEach(c => c && clone.classList.remove(c))
+    })
+  }
+  moveClass.split(/\s+/).forEach(c => c && clone.classList.add(c))
+  clone.style.display = 'none'
+  const container = (
+    root.nodeType === 1 ? root : root.parentNode
+  ) as HTMLElement
+  container.appendChild(clone)
+  const { hasTransform } = getTransitionInfo(clone)
+  container.removeChild(clone)
+  return hasTransform
+}
+
+=== End/Start of File ===
+File: ./src/directives/vModel.ts
+import {
+  type DirectiveBinding,
+  type DirectiveHook,
+  type ObjectDirective,
+  type VNode,
+  nextTick,
+  warn,
+} from '@vue/runtime-core'
+import { addEventListener } from '../modules/events'
+import {
+  invokeArrayFns,
+  isArray,
+  isSet,
+  looseEqual,
+  looseIndexOf,
+  looseToNumber,
+} from '@vue/shared'
+
+type AssignerFn = (value: any) => void
+
+const getModelAssigner = (vnode: VNode): AssignerFn => {
+  const fn =
+    vnode.props!['onUpdate:modelValue'] ||
+    (__COMPAT__ && vnode.props!['onModelCompat:input'])
+  return isArray(fn) ? value => invokeArrayFns(fn, value) : fn
+}
+
+function onCompositionStart(e: Event) {
+  ;(e.target as any).composing = true
+}
+
+function onCompositionEnd(e: Event) {
+  const target = e.target as any
+  if (target.composing) {
+    target.composing = false
+    target.dispatchEvent(new Event('input'))
+  }
+}
+
+const assignKey = Symbol('_assign')
+
+type ModelDirective<T> = ObjectDirective<
+  T & { [assignKey]: AssignerFn; _assigning?: boolean }
+>
+
+// We are exporting the v-model runtime directly as vnode hooks so that it can
+// be tree-shaken in case v-model is never used.
+export const vModelText: ModelDirective<
+  HTMLInputElement | HTMLTextAreaElement
+> = {
+  created(el, { modifiers: { lazy, trim, number } }, vnode) {
+    el[assignKey] = getModelAssigner(vnode)
+    const castToNumber =
+      number || (vnode.props && vnode.props.type === 'number')
+    addEventListener(el, lazy ? 'change' : 'input', e => {
+      if ((e.target as any).composing) return
+      let domValue: string | number = el.value
+      if (trim) {
+        domValue = domValue.trim()
+      }
+      if (castToNumber) {
+        domValue = looseToNumber(domValue)
+      }
+      el[assignKey](domValue)
+    })
+    if (trim) {
+      addEventListener(el, 'change', () => {
+        el.value = el.value.trim()
+      })
+    }
+    if (!lazy) {
+      addEventListener(el, 'compositionstart', onCompositionStart)
+      addEventListener(el, 'compositionend', onCompositionEnd)
+      // Safari < 10.2 & UIWebView doesn't fire compositionend when
+      // switching focus before confirming composition choice
+      // this also fixes the issue where some browsers e.g. iOS Chrome
+      // fires "change" instead of "input" on autocomplete.
+      addEventListener(el, 'change', onCompositionEnd)
+    }
+  },
+  // set value on mounted so it's after min/max for type="range"
+  mounted(el, { value }) {
+    el.value = value == null ? '' : value
+  },
+  beforeUpdate(el, { value, modifiers: { lazy, trim, number } }, vnode) {
+    el[assignKey] = getModelAssigner(vnode)
+    // avoid clearing unresolved text. #2302
+    if ((el as any).composing) return
+    const elValue =
+      (number || el.type === 'number') && !/^0\d/.test(el.value)
+        ? looseToNumber(el.value)
+        : el.value
+    const newValue = value == null ? '' : value
+
+    if (elValue === newValue) {
+      return
+    }
+
+    if (document.activeElement === el && el.type !== 'range') {
+      if (lazy) {
+        return
+      }
+      if (trim && el.value.trim() === newValue) {
+        return
+      }
+    }
+
+    el.value = newValue
+  },
+}
+
+export const vModelCheckbox: ModelDirective<HTMLInputElement> = {
+  // #4096 array checkboxes need to be deep traversed
+  deep: true,
+  created(el, _, vnode) {
+    el[assignKey] = getModelAssigner(vnode)
+    addEventListener(el, 'change', () => {
+      const modelValue = (el as any)._modelValue
+      const elementValue = getValue(el)
+      const checked = el.checked
+      const assign = el[assignKey]
+      if (isArray(modelValue)) {
+        const index = looseIndexOf(modelValue, elementValue)
+        const found = index !== -1
+        if (checked && !found) {
+          assign(modelValue.concat(elementValue))
+        } else if (!checked && found) {
+          const filtered = [...modelValue]
+          filtered.splice(index, 1)
+          assign(filtered)
+        }
+      } else if (isSet(modelValue)) {
+        const cloned = new Set(modelValue)
+        if (checked) {
+          cloned.add(elementValue)
+        } else {
+          cloned.delete(elementValue)
+        }
+        assign(cloned)
+      } else {
+        assign(getCheckboxValue(el, checked))
+      }
+    })
+  },
+  // set initial checked on mount to wait for true-value/false-value
+  mounted: setChecked,
+  beforeUpdate(el, binding, vnode) {
+    el[assignKey] = getModelAssigner(vnode)
+    setChecked(el, binding, vnode)
+  },
+}
+
+function setChecked(
+  el: HTMLInputElement,
+  { value, oldValue }: DirectiveBinding,
+  vnode: VNode,
+) {
+  // store the v-model value on the element so it can be accessed by the
+  // change listener.
+  ;(el as any)._modelValue = value
+  if (isArray(value)) {
+    el.checked = looseIndexOf(value, vnode.props!.value) > -1
+  } else if (isSet(value)) {
+    el.checked = value.has(vnode.props!.value)
+  } else if (value !== oldValue) {
+    el.checked = looseEqual(value, getCheckboxValue(el, true))
+  }
+}
+
+export const vModelRadio: ModelDirective<HTMLInputElement> = {
+  created(el, { value }, vnode) {
+    el.checked = looseEqual(value, vnode.props!.value)
+    el[assignKey] = getModelAssigner(vnode)
+    addEventListener(el, 'change', () => {
+      el[assignKey](getValue(el))
+    })
+  },
+  beforeUpdate(el, { value, oldValue }, vnode) {
+    el[assignKey] = getModelAssigner(vnode)
+    if (value !== oldValue) {
+      el.checked = looseEqual(value, vnode.props!.value)
+    }
+  },
+}
+
+export const vModelSelect: ModelDirective<HTMLSelectElement> = {
+  // <select multiple> value need to be deep traversed
+  deep: true,
+  created(el, { value, modifiers: { number } }, vnode) {
+    const isSetModel = isSet(value)
+    addEventListener(el, 'change', () => {
+      const selectedVal = Array.prototype.filter
+        .call(el.options, (o: HTMLOptionElement) => o.selected)
+        .map((o: HTMLOptionElement) =>
+          number ? looseToNumber(getValue(o)) : getValue(o),
+        )
+      el[assignKey](
+        el.multiple
+          ? isSetModel
+            ? new Set(selectedVal)
+            : selectedVal
+          : selectedVal[0],
+      )
+      el._assigning = true
+      nextTick(() => {
+        el._assigning = false
+      })
+    })
+    el[assignKey] = getModelAssigner(vnode)
+  },
+  // set value in mounted & updated because <select> relies on its children
+  // <option>s.
+  mounted(el, { value, modifiers: { number } }) {
+    setSelected(el, value, number)
+  },
+  beforeUpdate(el, _binding, vnode) {
+    el[assignKey] = getModelAssigner(vnode)
+  },
+  updated(el, { value, modifiers: { number } }) {
+    if (!el._assigning) {
+      setSelected(el, value, number)
+    }
+  },
+}
+
+function setSelected(el: HTMLSelectElement, value: any, number: boolean) {
+  const isMultiple = el.multiple
+  const isArrayValue = isArray(value)
+  if (isMultiple && !isArrayValue && !isSet(value)) {
+    __DEV__ &&
+      warn(
+        `<select multiple v-model> expects an Array or Set value for its binding, ` +
+          `but got ${Object.prototype.toString.call(value).slice(8, -1)}.`,
+      )
+    return
+  }
+
+  for (let i = 0, l = el.options.length; i < l; i++) {
+    const option = el.options[i]
+    const optionValue = getValue(option)
+    if (isMultiple) {
+      if (isArrayValue) {
+        const optionType = typeof optionValue
+        // fast path for string / number values
+        if (optionType === 'string' || optionType === 'number') {
+          option.selected = value.some(v => String(v) === String(optionValue))
+        } else {
+          option.selected = looseIndexOf(value, optionValue) > -1
+        }
+      } else {
+        option.selected = value.has(optionValue)
+      }
+    } else if (looseEqual(getValue(option), value)) {
+      if (el.selectedIndex !== i) el.selectedIndex = i
+      return
+    }
+  }
+  if (!isMultiple && el.selectedIndex !== -1) {
+    el.selectedIndex = -1
+  }
+}
+
+// retrieve raw value set via :value bindings
+function getValue(el: HTMLOptionElement | HTMLInputElement) {
+  return '_value' in el ? (el as any)._value : el.value
+}
+
+// retrieve raw value for true-value and false-value set via :true-value or :false-value bindings
+function getCheckboxValue(
+  el: HTMLInputElement & { _trueValue?: any; _falseValue?: any },
+  checked: boolean,
+) {
+  const key = checked ? '_trueValue' : '_falseValue'
+  return key in el ? el[key] : checked
+}
+
+export const vModelDynamic: ObjectDirective<
+  HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+> = {
+  created(el, binding, vnode) {
+    callModelHook(el, binding, vnode, null, 'created')
+  },
+  mounted(el, binding, vnode) {
+    callModelHook(el, binding, vnode, null, 'mounted')
+  },
+  beforeUpdate(el, binding, vnode, prevVNode) {
+    callModelHook(el, binding, vnode, prevVNode, 'beforeUpdate')
+  },
+  updated(el, binding, vnode, prevVNode) {
+    callModelHook(el, binding, vnode, prevVNode, 'updated')
+  },
+}
+
+function resolveDynamicModel(tagName: string, type: string | undefined) {
+  switch (tagName) {
+    case 'SELECT':
+      return vModelSelect
+    case 'TEXTAREA':
+      return vModelText
+    default:
+      switch (type) {
+        case 'checkbox':
+          return vModelCheckbox
+        case 'radio':
+          return vModelRadio
+        default:
+          return vModelText
+      }
+  }
+}
+
+function callModelHook(
+  el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement,
+  binding: DirectiveBinding,
+  vnode: VNode,
+  prevVNode: VNode | null,
+  hook: keyof ObjectDirective,
+) {
+  const modelToUse = resolveDynamicModel(
+    el.tagName,
+    vnode.props && vnode.props.type,
+  )
+  const fn = modelToUse[hook] as DirectiveHook
+  fn && fn(el, binding, vnode, prevVNode)
+}
+
+// SSR vnode transforms, only used when user includes client-oriented render
+// function in SSR
+export function initVModelForSSR() {
+  vModelText.getSSRProps = ({ value }) => ({ value })
+
+  vModelRadio.getSSRProps = ({ value }, vnode) => {
+    if (vnode.props && looseEqual(vnode.props.value, value)) {
+      return { checked: true }
+    }
+  }
+
+  vModelCheckbox.getSSRProps = ({ value }, vnode) => {
+    if (isArray(value)) {
+      if (vnode.props && looseIndexOf(value, vnode.props.value) > -1) {
+        return { checked: true }
+      }
+    } else if (isSet(value)) {
+      if (vnode.props && value.has(vnode.props.value)) {
+        return { checked: true }
+      }
+    } else if (value) {
+      return { checked: true }
+    }
+  }
+
+  vModelDynamic.getSSRProps = (binding, vnode) => {
+    if (typeof vnode.type !== 'string') {
+      return
+    }
+    const modelToUse = resolveDynamicModel(
+      // resolveDynamicModel expects an uppercase tag name, but vnode.type is lowercase
+      vnode.type.toUpperCase(),
+      vnode.props && vnode.props.type,
+    )
+    if (modelToUse.getSSRProps) {
+      return modelToUse.getSSRProps(binding, vnode)
+    }
+  }
+}
+
+=== End/Start of File ===
+File: ./src/directives/vOn.ts
+import {
+  type ComponentInternalInstance,
+  DeprecationTypes,
+  type LegacyConfig,
+  compatUtils,
+  getCurrentInstance,
+} from '@vue/runtime-core'
+import { hyphenate, isArray } from '@vue/shared'
+
+const systemModifiers = ['ctrl', 'shift', 'alt', 'meta']
+
+type KeyedEvent = KeyboardEvent | MouseEvent | TouchEvent
+type ModifierGuardsKeys =
+  | 'stop'
+  | 'prevent'
+  | 'self'
+  | 'ctrl'
+  | 'shift'
+  | 'alt'
+  | 'meta'
+  | 'left'
+  | 'middle'
+  | 'right'
+  | 'exact'
+
+const modifierGuards: Record<
+  ModifierGuardsKeys,
+  (e: Event, modifiers: string[]) => void | boolean
+> = {
+  stop: e => e.stopPropagation(),
+  prevent: e => e.preventDefault(),
+  self: e => e.target !== e.currentTarget,
+  ctrl: e => !(e as KeyedEvent).ctrlKey,
+  shift: e => !(e as KeyedEvent).shiftKey,
+  alt: e => !(e as KeyedEvent).altKey,
+  meta: e => !(e as KeyedEvent).metaKey,
+  left: e => 'button' in e && (e as MouseEvent).button !== 0,
+  middle: e => 'button' in e && (e as MouseEvent).button !== 1,
+  right: e => 'button' in e && (e as MouseEvent).button !== 2,
+  exact: (e, modifiers) =>
+    systemModifiers.some(m => (e as any)[`${m}Key`] && !modifiers.includes(m)),
+}
+
+/**
+ * @private
+ */
+export const withModifiers = <
+  T extends (event: Event, ...args: unknown[]) => any,
+>(
+  fn: T & { _withMods?: { [key: string]: T } },
+  modifiers: ModifierGuardsKeys[],
+) => {
+  const cache = fn._withMods || (fn._withMods = {})
+  const cacheKey = modifiers.join('.')
+  return (
+    cache[cacheKey] ||
+    (cache[cacheKey] = ((event, ...args) => {
+      for (let i = 0; i < modifiers.length; i++) {
+        const guard = modifierGuards[modifiers[i]]
+        if (guard && guard(event, modifiers)) return
+      }
+      return fn(event, ...args)
+    }) as T)
+  )
+}
+
+// Kept for 2.x compat.
+// Note: IE11 compat for `spacebar` and `del` is removed for now.
+const keyNames: Record<string, string | string[]> = {
+  esc: 'escape',
+  space: ' ',
+  up: 'arrow-up',
+  left: 'arrow-left',
+  right: 'arrow-right',
+  down: 'arrow-down',
+  delete: 'backspace',
+}
+
+/**
+ * @private
+ */
+export const withKeys = <T extends (event: KeyboardEvent) => any>(
+  fn: T & { _withKeys?: { [k: string]: T } },
+  modifiers: string[],
+) => {
+  let globalKeyCodes: LegacyConfig['keyCodes']
+  let instance: ComponentInternalInstance | null = null
+  if (__COMPAT__) {
+    instance = getCurrentInstance()
+    if (
+      compatUtils.isCompatEnabled(DeprecationTypes.CONFIG_KEY_CODES, instance)
+    ) {
+      if (instance) {
+        globalKeyCodes = (instance.appContext.config as LegacyConfig).keyCodes
+      }
+    }
+    if (__DEV__ && modifiers.some(m => /^\d+$/.test(m))) {
+      compatUtils.warnDeprecation(
+        DeprecationTypes.V_ON_KEYCODE_MODIFIER,
+        instance,
+      )
+    }
+  }
+
+  const cache: { [k: string]: T } = fn._withKeys || (fn._withKeys = {})
+  const cacheKey = modifiers.join('.')
+
+  return (
+    cache[cacheKey] ||
+    (cache[cacheKey] = (event => {
+      if (!('key' in event)) {
+        return
+      }
+
+      const eventKey = hyphenate(event.key)
+      if (modifiers.some(k => k === eventKey || keyNames[k] === eventKey)) {
+        return fn(event)
+      }
+
+      if (__COMPAT__) {
+        const keyCode = String(event.keyCode)
+        if (
+          compatUtils.isCompatEnabled(
+            DeprecationTypes.V_ON_KEYCODE_MODIFIER,
+            instance,
+          ) &&
+          modifiers.some(mod => mod == keyCode)
+        ) {
+          return fn(event)
+        }
+        if (globalKeyCodes) {
+          for (const mod of modifiers) {
+            const codes = globalKeyCodes[mod]
+            if (codes) {
+              const matches = isArray(codes)
+                ? codes.some(code => String(code) === keyCode)
+                : String(codes) === keyCode
+              if (matches) {
+                return fn(event)
+              }
+            }
+          }
+        }
+      }
+    }) as T)
+  )
+}
+
+=== End/Start of File ===
+File: ./src/directives/vShow.ts
+import type { ObjectDirective } from '@vue/runtime-core'
+
+export const vShowOriginalDisplay = Symbol('_vod')
+export const vShowHidden = Symbol('_vsh')
+
+export interface VShowElement extends HTMLElement {
+  // _vod = vue original display
+  [vShowOriginalDisplay]: string
+  [vShowHidden]: boolean
+}
+
+export const vShow: ObjectDirective<VShowElement> & { name?: 'show' } = {
+  beforeMount(el, { value }, { transition }) {
+    el[vShowOriginalDisplay] =
+      el.style.display === 'none' ? '' : el.style.display
+    if (transition && value) {
+      transition.beforeEnter(el)
+    } else {
+      setDisplay(el, value)
+    }
+  },
+  mounted(el, { value }, { transition }) {
+    if (transition && value) {
+      transition.enter(el)
+    }
+  },
+  updated(el, { value, oldValue }, { transition }) {
+    if (!value === !oldValue) return
+    if (transition) {
+      if (value) {
+        transition.beforeEnter(el)
+        setDisplay(el, true)
+        transition.enter(el)
+      } else {
+        transition.leave(el, () => {
+          setDisplay(el, false)
+        })
+      }
+    } else {
+      setDisplay(el, value)
+    }
+  },
+  beforeUnmount(el, { value }) {
+    setDisplay(el, value)
+  },
+}
+
+if (__DEV__) {
+  vShow.name = 'show'
+}
+
+function setDisplay(el: VShowElement, value: unknown): void {
+  el.style.display = value ? el[vShowOriginalDisplay] : 'none'
+  el[vShowHidden] = !value
+}
+
+// SSR vnode transforms, only used when user includes client-oriented render
+// function in SSR
+export function initVShowForSSR() {
+  vShow.getSSRProps = ({ value }) => {
+    if (!value) {
+      return { style: { display: 'none' } }
+    }
+  }
+}
+
+=== End/Start of File ===
+File: ./src/helpers/useCssModule.ts
+import { getCurrentInstance, warn } from '@vue/runtime-core'
+import { EMPTY_OBJ } from '@vue/shared'
+
+export function useCssModule(name = '$style'): Record<string, string> {
+  /* istanbul ignore else */
+  if (!__GLOBAL__) {
+    const instance = getCurrentInstance()!
+    if (!instance) {
+      __DEV__ && warn(`useCssModule must be called inside setup()`)
+      return EMPTY_OBJ
+    }
+    const modules = instance.type.__cssModules
+    if (!modules) {
+      __DEV__ && warn(`Current instance does not have CSS modules injected.`)
+      return EMPTY_OBJ
+    }
+    const mod = modules[name]
+    if (!mod) {
+      __DEV__ &&
+        warn(`Current instance does not have CSS module named "${name}".`)
+      return EMPTY_OBJ
+    }
+    return mod as Record<string, string>
+  } else {
+    if (__DEV__) {
+      warn(`useCssModule() is not supported in the global build.`)
+    }
+    return EMPTY_OBJ
+  }
+}
+
+=== End/Start of File ===
+File: ./src/helpers/useCssVars.ts
+import {
+  Fragment,
+  Static,
+  type VNode,
+  getCurrentInstance,
+  onMounted,
+  onUnmounted,
+  warn,
+  watchPostEffect,
+} from '@vue/runtime-core'
+import { ShapeFlags } from '@vue/shared'
+
+export const CSS_VAR_TEXT = Symbol(__DEV__ ? 'CSS_VAR_TEXT' : '')
+/**
+ * Runtime helper for SFC's CSS variable injection feature.
+ * @private
+ */
+export function useCssVars(getter: (ctx: any) => Record<string, string>) {
+  if (!__BROWSER__ && !__TEST__) return
+
+  const instance = getCurrentInstance()
+  /* istanbul ignore next */
+  if (!instance) {
+    __DEV__ &&
+      warn(`useCssVars is called without current active component instance.`)
+    return
+  }
+
+  const updateTeleports = (instance.ut = (vars = getter(instance.proxy)) => {
+    Array.from(
+      document.querySelectorAll(`[data-v-owner="${instance.uid}"]`),
+    ).forEach(node => setVarsOnNode(node, vars))
+  })
+
+  if (__DEV__) {
+    instance.getCssVars = () => getter(instance.proxy)
+  }
+
+  const setVars = () => {
+    const vars = getter(instance.proxy)
+    setVarsOnVNode(instance.subTree, vars)
+    updateTeleports(vars)
+  }
+
+  onMounted(() => {
+    watchPostEffect(setVars)
+    const ob = new MutationObserver(setVars)
+    ob.observe(instance.subTree.el!.parentNode, { childList: true })
+    onUnmounted(() => ob.disconnect())
+  })
+}
+
+function setVarsOnVNode(vnode: VNode, vars: Record<string, string>) {
+  if (__FEATURE_SUSPENSE__ && vnode.shapeFlag & ShapeFlags.SUSPENSE) {
+    const suspense = vnode.suspense!
+    vnode = suspense.activeBranch!
+    if (suspense.pendingBranch && !suspense.isHydrating) {
+      suspense.effects.push(() => {
+        setVarsOnVNode(suspense.activeBranch!, vars)
+      })
+    }
+  }
+
+  // drill down HOCs until it's a non-component vnode
+  while (vnode.component) {
+    vnode = vnode.component.subTree
+  }
+
+  if (vnode.shapeFlag & ShapeFlags.ELEMENT && vnode.el) {
+    setVarsOnNode(vnode.el as Node, vars)
+  } else if (vnode.type === Fragment) {
+    ;(vnode.children as VNode[]).forEach(c => setVarsOnVNode(c, vars))
+  } else if (vnode.type === Static) {
+    let { el, anchor } = vnode
+    while (el) {
+      setVarsOnNode(el as Node, vars)
+      if (el === anchor) break
+      el = el.nextSibling
+    }
+  }
+}
+
+function setVarsOnNode(el: Node, vars: Record<string, string>) {
+  if (el.nodeType === 1) {
+    const style = (el as HTMLElement).style
+    let cssText = ''
+    for (const key in vars) {
+      style.setProperty(`--${key}`, vars[key])
+      cssText += `--${key}: ${vars[key]};`
+    }
+    ;(style as any)[CSS_VAR_TEXT] = cssText
+  }
+}
+
+=== End/Start of File ===
+File: ./src/index.ts
+import {
+  type App,
+  type CreateAppFunction,
+  DeprecationTypes,
+  type ElementNamespace,
+  type HydrationRenderer,
+  type Renderer,
+  type RootHydrateFunction,
+  type RootRenderFunction,
+  compatUtils,
+  createHydrationRenderer,
+  createRenderer,
+  isRuntimeOnly,
+  warn,
+} from '@vue/runtime-core'
+import { nodeOps } from './nodeOps'
+import { patchProp } from './patchProp'
+// Importing from the compiler, will be tree-shaken in prod
+import {
+  NOOP,
+  extend,
+  isFunction,
+  isHTMLTag,
+  isMathMLTag,
+  isSVGTag,
+  isString,
+} from '@vue/shared'
+
+declare module '@vue/reactivity' {
+  export interface RefUnwrapBailTypes {
+    runtimeDOMBailTypes: Node | Window
+  }
+}
+
+const rendererOptions = /*#__PURE__*/ extend({ patchProp }, nodeOps)
+
+// lazy create the renderer - this makes core renderer logic tree-shakable
+// in case the user only imports reactivity utilities from Vue.
+let renderer: Renderer<Element | ShadowRoot> | HydrationRenderer
+
+let enabledHydration = false
+
+function ensureRenderer() {
+  return (
+    renderer ||
+    (renderer = createRenderer<Node, Element | ShadowRoot>(rendererOptions))
+  )
+}
+
+function ensureHydrationRenderer() {
+  renderer = enabledHydration
+    ? renderer
+    : createHydrationRenderer(rendererOptions)
+  enabledHydration = true
+  return renderer as HydrationRenderer
+}
+
+// use explicit type casts here to avoid import() calls in rolled-up d.ts
+export const render = ((...args) => {
+  ensureRenderer().render(...args)
+}) as RootRenderFunction<Element | ShadowRoot>
+
+export const hydrate = ((...args) => {
+  ensureHydrationRenderer().hydrate(...args)
+}) as RootHydrateFunction
+
+export const createApp = ((...args) => {
+  const app = ensureRenderer().createApp(...args)
+
+  if (__DEV__) {
+    injectNativeTagCheck(app)
+    injectCompilerOptionsCheck(app)
+  }
+
+  const { mount } = app
+  app.mount = (containerOrSelector: Element | ShadowRoot | string): any => {
+    const container = normalizeContainer(containerOrSelector)
+    if (!container) return
+
+    const component = app._component
+    if (!isFunction(component) && !component.render && !component.template) {
+      // __UNSAFE__
+      // Reason: potential execution of JS expressions in in-DOM template.
+      // The user must make sure the in-DOM template is trusted. If it's
+      // rendered by the server, the template should not contain any user data.
+      component.template = container.innerHTML
+      // 2.x compat check
+      if (__COMPAT__ && __DEV__) {
+        for (let i = 0; i < container.attributes.length; i++) {
+          const attr = container.attributes[i]
+          if (attr.name !== 'v-cloak' && /^(v-|:|@)/.test(attr.name)) {
+            compatUtils.warnDeprecation(
+              DeprecationTypes.GLOBAL_MOUNT_CONTAINER,
+              null,
+            )
+            break
+          }
+        }
+      }
+    }
+
+    // clear content before mounting
+    container.innerHTML = ''
+    const proxy = mount(container, false, resolveRootNamespace(container))
+    if (container instanceof Element) {
+      container.removeAttribute('v-cloak')
+      container.setAttribute('data-v-app', '')
+    }
+    return proxy
+  }
+
+  return app
+}) as CreateAppFunction<Element>
+
+export const createSSRApp = ((...args) => {
+  const app = ensureHydrationRenderer().createApp(...args)
+
+  if (__DEV__) {
+    injectNativeTagCheck(app)
+    injectCompilerOptionsCheck(app)
+  }
+
+  const { mount } = app
+  app.mount = (containerOrSelector: Element | ShadowRoot | string): any => {
+    const container = normalizeContainer(containerOrSelector)
+    if (container) {
+      return mount(container, true, resolveRootNamespace(container))
+    }
+  }
+
+  return app
+}) as CreateAppFunction<Element>
+
+function resolveRootNamespace(container: Element): ElementNamespace {
+  if (container instanceof SVGElement) {
+    return 'svg'
+  }
+  if (
+    typeof MathMLElement === 'function' &&
+    container instanceof MathMLElement
+  ) {
+    return 'mathml'
+  }
+}
+
+function injectNativeTagCheck(app: App) {
+  // Inject `isNativeTag`
+  // this is used for component name validation (dev only)
+  Object.defineProperty(app.config, 'isNativeTag', {
+    value: (tag: string) => isHTMLTag(tag) || isSVGTag(tag) || isMathMLTag(tag),
+    writable: false,
+  })
+}
+
+// dev only
+function injectCompilerOptionsCheck(app: App) {
+  if (isRuntimeOnly()) {
+    const isCustomElement = app.config.isCustomElement
+    Object.defineProperty(app.config, 'isCustomElement', {
+      get() {
+        return isCustomElement
+      },
+      set() {
+        warn(
+          `The \`isCustomElement\` config option is deprecated. Use ` +
+            `\`compilerOptions.isCustomElement\` instead.`,
+        )
+      },
+    })
+
+    const compilerOptions = app.config.compilerOptions
+    const msg =
+      `The \`compilerOptions\` config option is only respected when using ` +
+      `a build of Vue.js that includes the runtime compiler (aka "full build"). ` +
+      `Since you are using the runtime-only build, \`compilerOptions\` ` +
+      `must be passed to \`@vue/compiler-dom\` in the build setup instead.\n` +
+      `- For vue-loader: pass it via vue-loader's \`compilerOptions\` loader option.\n` +
+      `- For vue-cli: see https://cli.vuejs.org/guide/webpack.html#modifying-options-of-a-loader\n` +
+      `- For vite: pass it via @vitejs/plugin-vue options. See https://github.com/vitejs/vite-plugin-vue/tree/main/packages/plugin-vue#example-for-passing-options-to-vuecompiler-sfc`
+
+    Object.defineProperty(app.config, 'compilerOptions', {
+      get() {
+        warn(msg)
+        return compilerOptions
+      },
+      set() {
+        warn(msg)
+      },
+    })
+  }
+}
+
+function normalizeContainer(
+  container: Element | ShadowRoot | string,
+): Element | null {
+  if (isString(container)) {
+    const res = document.querySelector(container)
+    if (__DEV__ && !res) {
+      warn(
+        `Failed to mount app: mount target selector "${container}" returned null.`,
+      )
+    }
+    return res
+  }
+  if (
+    __DEV__ &&
+    window.ShadowRoot &&
+    container instanceof window.ShadowRoot &&
+    container.mode === 'closed'
+  ) {
+    warn(
+      `mounting on a ShadowRoot with \`{mode: "closed"}\` may lead to unpredictable bugs`,
+    )
+  }
+  return container as any
+}
+
+// Custom element support
+export {
+  defineCustomElement,
+  defineSSRCustomElement,
+  VueElement,
+  type VueElementConstructor,
+} from './apiCustomElement'
+
+// SFC CSS utilities
+export { useCssModule } from './helpers/useCssModule'
+export { useCssVars } from './helpers/useCssVars'
+
+// DOM-only components
+export { Transition, type TransitionProps } from './components/Transition'
+export {
+  TransitionGroup,
+  type TransitionGroupProps,
+} from './components/TransitionGroup'
+
+// **Internal** DOM-only runtime directive helpers
+export {
+  vModelText,
+  vModelCheckbox,
+  vModelRadio,
+  vModelSelect,
+  vModelDynamic,
+} from './directives/vModel'
+export { withModifiers, withKeys } from './directives/vOn'
+export { vShow } from './directives/vShow'
+
+import { initVModelForSSR } from './directives/vModel'
+import { initVShowForSSR } from './directives/vShow'
+
+let ssrDirectiveInitialized = false
+
+/**
+ * @internal
+ */
+export const initDirectivesForSSR = __SSR__
+  ? () => {
+      if (!ssrDirectiveInitialized) {
+        ssrDirectiveInitialized = true
+        initVModelForSSR()
+        initVShowForSSR()
+      }
+    }
+  : NOOP
+
+// re-export everything from core
+// h, Component, reactivity API, nextTick, flags & types
+export * from '@vue/runtime-core'
+
+export * from './jsx'
+
+=== End/Start of File ===
+File: ./src/jsx.ts
+// Note: this file is auto concatenated to the end of the bundled d.ts during
+// build.
+
+// This code is based on react definition in DefinitelyTyped published under the MIT license.
+//      Repository: https://github.com/DefinitelyTyped/DefinitelyTyped
+//      Path in the repository: types/react/index.d.ts
+//
+// Copyrights of original definition are:
+//      AssureSign <http://www.assuresign.com>
+//      Microsoft <https://microsoft.com>
+//                 John Reilly <https://github.com/johnnyreilly>
+//      Benoit Benezech <https://github.com/bbenezech>
+//      Patricio Zavolinsky <https://github.com/pzavolinsky>
+//      Digiguru <https://github.com/digiguru>
+//      Eric Anderson <https://github.com/ericanderson>
+//      Dovydas Navickas <https://github.com/DovydasNavickas>
+//                 Josh Rutherford <https://github.com/theruther4d>
+//                 Guilherme Hübner <https://github.com/guilhermehubner>
+//                 Ferdy Budhidharma <https://github.com/ferdaber>
+//                 Johann Rakotoharisoa <https://github.com/jrakotoharisoa>
+//                 Olivier Pascal <https://github.com/pascaloliv>
+//                 Martin Hochel <https://github.com/hotell>
+//                 Frank Li <https://github.com/franklixuefei>
+//                 Jessica Franco <https://github.com/Jessidhia>
+//                 Saransh Kataria <https://github.com/saranshkataria>
+//                 Kanitkorn Sujautra <https://github.com/lukyth>
+//                 Sebastian Silbermann <https://github.com/eps1lon>
+
+import type * as CSS from 'csstype'
+
+export interface CSSProperties
+  extends CSS.Properties<string | number>,
+    CSS.PropertiesHyphen<string | number> {
+  /**
+   * The index signature was removed to enable closed typing for style
+   * using CSSType. You're able to use type assertion or module augmentation
+   * to add properties or an index signature of your own.
+   *
+   * For examples and more information, visit:
+   * https://github.com/frenic/csstype#what-should-i-do-when-i-get-type-errors
+   */
+  [v: `--${string}`]: string | number | undefined
+}
+
+type Booleanish = boolean | 'true' | 'false'
+type Numberish = number | string
+
+// All the WAI-ARIA 1.1 attributes from https://www.w3.org/TR/wai-aria-1.1/
+export interface AriaAttributes {
+  /** Identifies the currently active element when DOM focus is on a composite widget, textbox, group, or application. */
+  'aria-activedescendant'?: string
+  /** Indicates whether assistive technologies will present all, or only parts of, the changed region based on the change notifications defined by the aria-relevant attribute. */
+  'aria-atomic'?: Booleanish
+  /**
+   * Indicates whether inputting text could trigger display of one or more predictions of the user's intended value for an input and specifies how predictions would be
+   * presented if they are made.
+   */
+  'aria-autocomplete'?: 'none' | 'inline' | 'list' | 'both'
+  /** Indicates an element is being modified and that assistive technologies MAY want to wait until the modifications are complete before exposing them to the user. */
+  'aria-busy'?: Booleanish
+  /**
+   * Indicates the current "checked" state of checkboxes, radio buttons, and other widgets.
+   * @see aria-pressed @see aria-selected.
+   */
+  'aria-checked'?: Booleanish | 'mixed'
+  /**
+   * Defines the total number of columns in a table, grid, or treegrid.
+   * @see aria-colindex.
+   */
+  'aria-colcount'?: Numberish
+  /**
+   * Defines an element's column index or position with respect to the total number of columns within a table, grid, or treegrid.
+   * @see aria-colcount @see aria-colspan.
+   */
+  'aria-colindex'?: Numberish
+  /**
+   * Defines the number of columns spanned by a cell or gridcell within a table, grid, or treegrid.
+   * @see aria-colindex @see aria-rowspan.
+   */
+  'aria-colspan'?: Numberish
+  /**
+   * Identifies the element (or elements) whose contents or presence are controlled by the current element.
+   * @see aria-owns.
+   */
+  'aria-controls'?: string
+  /** Indicates the element that represents the current item within a container or set of related elements. */
+  'aria-current'?: Booleanish | 'page' | 'step' | 'location' | 'date' | 'time'
+  /**
+   * Identifies the element (or elements) that describes the object.
+   * @see aria-labelledby
+   */
+  'aria-describedby'?: string
+  /**
+   * Identifies the element that provides a detailed, extended description for the object.
+   * @see aria-describedby.
+   */
+  'aria-details'?: string
+  /**
+   * Indicates that the element is perceivable but disabled, so it is not editable or otherwise operable.
+   * @see aria-hidden @see aria-readonly.
+   */
+  'aria-disabled'?: Booleanish
+  /**
+   * Indicates what functions can be performed when a dragged object is released on the drop target.
+   * @deprecated in ARIA 1.1
+   */
+  'aria-dropeffect'?: 'none' | 'copy' | 'execute' | 'link' | 'move' | 'popup'
+  /**
+   * Identifies the element that provides an error message for the object.
+   * @see aria-invalid @see aria-describedby.
+   */
+  'aria-errormessage'?: string
+  /** Indicates whether the element, or another grouping element it controls, is currently expanded or collapsed. */
+  'aria-expanded'?: Booleanish
+  /**
+   * Identifies the next element (or elements) in an alternate reading order of content which, at the user's discretion,
+   * allows assistive technology to override the general default of reading in document source order.
+   */
+  'aria-flowto'?: string
+  /**
+   * Indicates an element's "grabbed" state in a drag-and-drop operation.
+   * @deprecated in ARIA 1.1
+   */
+  'aria-grabbed'?: Booleanish
+  /** Indicates the availability and type of interactive popup element, such as menu or dialog, that can be triggered by an element. */
+  'aria-haspopup'?: Booleanish | 'menu' | 'listbox' | 'tree' | 'grid' | 'dialog'
+  /**
+   * Indicates whether the element is exposed to an accessibility API.
+   * @see aria-disabled.
+   */
+  'aria-hidden'?: Booleanish
+  /**
+   * Indicates the entered value does not conform to the format expected by the application.
+   * @see aria-errormessage.
+   */
+  'aria-invalid'?: Booleanish | 'grammar' | 'spelling'
+  /** Indicates keyboard shortcuts that an author has implemented to activate or give focus to an element. */
+  'aria-keyshortcuts'?: string
+  /**
+   * Defines a string value that labels the current element.
+   * @see aria-labelledby.
+   */
+  'aria-label'?: string
+  /**
+   * Identifies the element (or elements) that labels the current element.
+   * @see aria-describedby.
+   */
+  'aria-labelledby'?: string
+  /** Defines the hierarchical level of an element within a structure. */
+  'aria-level'?: Numberish
+  /** Indicates that an element will be updated, and describes the types of updates the user agents, assistive technologies, and user can expect from the live region. */
+  'aria-live'?: 'off' | 'assertive' | 'polite'
+  /** Indicates whether an element is modal when displayed. */
+  'aria-modal'?: Booleanish
+  /** Indicates whether a text box accepts multiple lines of input or only a single line. */
+  'aria-multiline'?: Booleanish
+  /** Indicates that the user may select more than one item from the current selectable descendants. */
+  'aria-multiselectable'?: Booleanish
+  /** Indicates whether the element's orientation is horizontal, vertical, or unknown/ambiguous. */
+  'aria-orientation'?: 'horizontal' | 'vertical'
+  /**
+   * Identifies an element (or elements) in order to define a visual, functional, or contextual parent/child relationship
+   * between DOM elements where the DOM hierarchy cannot be used to represent the relationship.
+   * @see aria-controls.
+   */
+  'aria-owns'?: string
+  /**
+   * Defines a short hint (a word or short phrase) intended to aid the user with data entry when the control has no value.
+   * A hint could be a sample value or a brief description of the expected format.
+   */
+  'aria-placeholder'?: string
+  /**
+   * Defines an element's number or position in the current set of listitems or treeitems. Not required if all elements in the set are present in the DOM.
+   * @see aria-setsize.
+   */
+  'aria-posinset'?: Numberish
+  /**
+   * Indicates the current "pressed" state of toggle buttons.
+   * @see aria-checked @see aria-selected.
+   */
+  'aria-pressed'?: Booleanish | 'mixed'
+  /**
+   * Indicates that the element is not editable, but is otherwise operable.
+   * @see aria-disabled.
+   */
+  'aria-readonly'?: Booleanish
+  /**
+   * Indicates what notifications the user agent will trigger when the accessibility tree within a live region is modified.
+   * @see aria-atomic.
+   */
+  'aria-relevant'?:
+    | 'additions'
+    | 'additions removals'
+    | 'additions text'
+    | 'all'
+    | 'removals'
+    | 'removals additions'
+    | 'removals text'
+    | 'text'
+    | 'text additions'
+    | 'text removals'
+  /** Indicates that user input is required on the element before a form may be submitted. */
+  'aria-required'?: Booleanish
+  /** Defines a human-readable, author-localized description for the role of an element. */
+  'aria-roledescription'?: string
+  /**
+   * Defines the total number of rows in a table, grid, or treegrid.
+   * @see aria-rowindex.
+   */
+  'aria-rowcount'?: Numberish
+  /**
+   * Defines an element's row index or position with respect to the total number of rows within a table, grid, or treegrid.
+   * @see aria-rowcount @see aria-rowspan.
+   */
+  'aria-rowindex'?: Numberish
+  /**
+   * Defines the number of rows spanned by a cell or gridcell within a table, grid, or treegrid.
+   * @see aria-rowindex @see aria-colspan.
+   */
+  'aria-rowspan'?: Numberish
+  /**
+   * Indicates the current "selected" state of various widgets.
+   * @see aria-checked @see aria-pressed.
+   */
+  'aria-selected'?: Booleanish
+  /**
+   * Defines the number of items in the current set of listitems or treeitems. Not required if all elements in the set are present in the DOM.
+   * @see aria-posinset.
+   */
+  'aria-setsize'?: Numberish
+  /** Indicates if items in a table or grid are sorted in ascending or descending order. */
+  'aria-sort'?: 'none' | 'ascending' | 'descending' | 'other'
+  /** Defines the maximum allowed value for a range widget. */
+  'aria-valuemax'?: Numberish
+  /** Defines the minimum allowed value for a range widget. */
+  'aria-valuemin'?: Numberish
+  /**
+   * Defines the current value for a range widget.
+   * @see aria-valuetext.
+   */
+  'aria-valuenow'?: Numberish
+  /** Defines the human readable text alternative of aria-valuenow for a range widget. */
+  'aria-valuetext'?: string
+}
+
+// Vue's style normalization supports nested arrays
+export type StyleValue =
+  | false
+  | null
+  | undefined
+  | string
+  | CSSProperties
+  | Array<StyleValue>
+
+export interface HTMLAttributes extends AriaAttributes, EventHandlers<Events> {
+  innerHTML?: string
+
+  class?: any
+  style?: StyleValue
+
+  // Standard HTML Attributes
+  accesskey?: string
+  contenteditable?: Booleanish | 'inherit' | 'plaintext-only'
+  contextmenu?: string
+  dir?: string
+  draggable?: Booleanish
+  hidden?: Booleanish | '' | 'hidden' | 'until-found'
+  id?: string
+  inert?: Booleanish
+  lang?: string
+  placeholder?: string
+  spellcheck?: Booleanish
+  tabindex?: Numberish
+  title?: string
+  translate?: 'yes' | 'no'
+
+  // Unknown
+  radiogroup?: string // <command>, <menuitem>
+
+  // WAI-ARIA
+  role?: string
+
+  // RDFa Attributes
+  about?: string
+  datatype?: string
+  inlist?: any
+  prefix?: string
+  property?: string
+  resource?: string
+  typeof?: string
+  vocab?: string
+
+  // Non-standard Attributes
+  autocapitalize?: string
+  autocorrect?: string
+  autosave?: string
+  color?: string
+  itemprop?: string
+  itemscope?: Booleanish
+  itemtype?: string
+  itemid?: string
+  itemref?: string
+  results?: Numberish
+  security?: string
+  unselectable?: 'on' | 'off'
+
+  // Living Standard
+  /**
+   * Hints at the type of data that might be entered by the user while editing the element or its contents
+   * @see https://html.spec.whatwg.org/multipage/interaction.html#input-modalities:-the-inputmode-attribute
+   */
+  inputmode?:
+    | 'none'
+    | 'text'
+    | 'tel'
+    | 'url'
+    | 'email'
+    | 'numeric'
+    | 'decimal'
+    | 'search'
+  /**
+   * Specify that a standard HTML element should behave like a defined custom built-in element
+   * @see https://html.spec.whatwg.org/multipage/custom-elements.html#attr-is
+   */
+  is?: string
+}
+
+type HTMLAttributeReferrerPolicy =
+  | ''
+  | 'no-referrer'
+  | 'no-referrer-when-downgrade'
+  | 'origin'
+  | 'origin-when-cross-origin'
+  | 'same-origin'
+  | 'strict-origin'
+  | 'strict-origin-when-cross-origin'
+  | 'unsafe-url'
+
+export interface AnchorHTMLAttributes extends HTMLAttributes {
+  download?: any
+  href?: string
+  hreflang?: string
+  media?: string
+  ping?: string
+  rel?: string
+  target?: string
+  type?: string
+  referrerpolicy?: HTMLAttributeReferrerPolicy
+}
+
+export interface AreaHTMLAttributes extends HTMLAttributes {
+  alt?: string
+  coords?: string
+  download?: any
+  href?: string
+  hreflang?: string
+  media?: string
+  referrerpolicy?: HTMLAttributeReferrerPolicy
+  rel?: string
+  shape?: string
+  target?: string
+}
+
+export interface AudioHTMLAttributes extends MediaHTMLAttributes {}
+
+export interface BaseHTMLAttributes extends HTMLAttributes {
+  href?: string
+  target?: string
+}
+
+export interface BlockquoteHTMLAttributes extends HTMLAttributes {
+  cite?: string
+}
+
+export interface ButtonHTMLAttributes extends HTMLAttributes {
+  autofocus?: Booleanish
+  disabled?: Booleanish
+  form?: string
+  formaction?: string
+  formenctype?: string
+  formmethod?: string
+  formnovalidate?: Booleanish
+  formtarget?: string
+  name?: string
+  type?: 'submit' | 'reset' | 'button'
+  value?: string | ReadonlyArray<string> | number
+}
+
+export interface CanvasHTMLAttributes extends HTMLAttributes {
+  height?: Numberish
+  width?: Numberish
+}
+
+export interface ColHTMLAttributes extends HTMLAttributes {
+  span?: Numberish
+  width?: Numberish
+}
+
+export interface ColgroupHTMLAttributes extends HTMLAttributes {
+  span?: Numberish
+}
+
+export interface DataHTMLAttributes extends HTMLAttributes {
+  value?: string | ReadonlyArray<string> | number
+}
+
+export interface DetailsHTMLAttributes extends HTMLAttributes {
+  open?: Booleanish
+  onToggle?: Event
+}
+
+export interface DelHTMLAttributes extends HTMLAttributes {
+  cite?: string
+  datetime?: string
+}
+
+export interface DialogHTMLAttributes extends HTMLAttributes {
+  open?: Booleanish
+}
+
+export interface EmbedHTMLAttributes extends HTMLAttributes {
+  height?: Numberish
+  src?: string
+  type?: string
+  width?: Numberish
+}
+
+export interface FieldsetHTMLAttributes extends HTMLAttributes {
+  disabled?: Booleanish
+  form?: string
+  name?: string
+}
+
+export interface FormHTMLAttributes extends HTMLAttributes {
+  acceptcharset?: string
+  action?: string
+  autocomplete?: string
+  enctype?: string
+  method?: string
+  name?: string
+  novalidate?: Booleanish
+  target?: string
+}
+
+export interface HtmlHTMLAttributes extends HTMLAttributes {
+  manifest?: string
+}
+
+export interface IframeHTMLAttributes extends HTMLAttributes {
+  allow?: string
+  allowfullscreen?: Booleanish
+  allowtransparency?: Booleanish
+  /** @deprecated */
+  frameborder?: Numberish
+  height?: Numberish
+  /** @deprecated */
+  marginheight?: Numberish
+  /** @deprecated */
+  marginwidth?: Numberish
+  name?: string
+  referrerpolicy?: HTMLAttributeReferrerPolicy
+  sandbox?: string
+  /** @deprecated */
+  scrolling?: string
+  seamless?: Booleanish
+  src?: string
+  srcdoc?: string
+  width?: Numberish
+}
+
+export interface ImgHTMLAttributes extends HTMLAttributes {
+  alt?: string
+  crossorigin?: 'anonymous' | 'use-credentials' | ''
+  decoding?: 'async' | 'auto' | 'sync'
+  height?: Numberish
+  loading?: 'eager' | 'lazy'
+  referrerpolicy?: HTMLAttributeReferrerPolicy
+  sizes?: string
+  src?: string
+  srcset?: string
+  usemap?: string
+  width?: Numberish
+}
+
+export interface InsHTMLAttributes extends HTMLAttributes {
+  cite?: string
+  datetime?: string
+}
+
+export type InputTypeHTMLAttribute =
+  | 'button'
+  | 'checkbox'
+  | 'color'
+  | 'date'
+  | 'datetime-local'
+  | 'email'
+  | 'file'
+  | 'hidden'
+  | 'image'
+  | 'month'
+  | 'number'
+  | 'password'
+  | 'radio'
+  | 'range'
+  | 'reset'
+  | 'search'
+  | 'submit'
+  | 'tel'
+  | 'text'
+  | 'time'
+  | 'url'
+  | 'week'
+  | (string & {})
+
+export interface InputHTMLAttributes extends HTMLAttributes {
+  accept?: string
+  alt?: string
+  autocomplete?: string
+  autofocus?: Booleanish
+  capture?: boolean | 'user' | 'environment' // https://www.w3.org/tr/html-media-capture/#the-capture-attribute
+  checked?: Booleanish | any[] | Set<any> // for IDE v-model multi-checkbox support
+  crossorigin?: string
+  disabled?: Booleanish
+  enterKeyHint?:
+    | 'enter'
+    | 'done'
+    | 'go'
+    | 'next'
+    | 'previous'
+    | 'search'
+    | 'send'
+  form?: string
+  formaction?: string
+  formenctype?: string
+  formmethod?: string
+  formnovalidate?: Booleanish
+  formtarget?: string
+  height?: Numberish
+  indeterminate?: boolean
+  list?: string
+  max?: Numberish
+  maxlength?: Numberish
+  min?: Numberish
+  minlength?: Numberish
+  multiple?: Booleanish
+  name?: string
+  pattern?: string
+  placeholder?: string
+  readonly?: Booleanish
+  required?: Booleanish
+  size?: Numberish
+  src?: string
+  step?: Numberish
+  type?: InputTypeHTMLAttribute
+  value?: any // we support :value to be bound to anything w/ v-model
+  width?: Numberish
+}
+
+export interface KeygenHTMLAttributes extends HTMLAttributes {
+  autofocus?: Booleanish
+  challenge?: string
+  disabled?: Booleanish
+  form?: string
+  keytype?: string
+  keyparams?: string
+  name?: string
+}
+
+export interface LabelHTMLAttributes extends HTMLAttributes {
+  for?: string
+  form?: string
+}
+
+export interface LiHTMLAttributes extends HTMLAttributes {
+  value?: string | ReadonlyArray<string> | number
+}
+
+export interface LinkHTMLAttributes extends HTMLAttributes {
+  as?: string
+  crossorigin?: string
+  href?: string
+  hreflang?: string
+  integrity?: string
+  media?: string
+  referrerpolicy?: HTMLAttributeReferrerPolicy
+  rel?: string
+  sizes?: string
+  type?: string
+  charset?: string
+}
+
+export interface MapHTMLAttributes extends HTMLAttributes {
+  name?: string
+}
+
+export interface MenuHTMLAttributes extends HTMLAttributes {
+  type?: string
+}
+
+export interface MediaHTMLAttributes extends HTMLAttributes {
+  autoplay?: Booleanish
+  controls?: Booleanish
+  controlslist?: string
+  crossorigin?: string
+  loop?: Booleanish
+  mediagroup?: string
+  muted?: Booleanish
+  playsinline?: Booleanish
+  preload?: string
+  src?: string
+}
+
+export interface MetaHTMLAttributes extends HTMLAttributes {
+  charset?: string
+  content?: string
+  httpequiv?: string
+  name?: string
+}
+
+export interface MeterHTMLAttributes extends HTMLAttributes {
+  form?: string
+  high?: Numberish
+  low?: Numberish
+  max?: Numberish
+  min?: Numberish
+  optimum?: Numberish
+  value?: string | ReadonlyArray<string> | number
+}
+
+export interface QuoteHTMLAttributes extends HTMLAttributes {
+  cite?: string
+}
+
+export interface ObjectHTMLAttributes extends HTMLAttributes {
+  classid?: string
+  data?: string
+  form?: string
+  height?: Numberish
+  name?: string
+  type?: string
+  usemap?: string
+  width?: Numberish
+  wmode?: string
+}
+
+export interface OlHTMLAttributes extends HTMLAttributes {
+  reversed?: Booleanish
+  start?: Numberish
+  type?: '1' | 'a' | 'A' | 'i' | 'I'
+}
+
+export interface OptgroupHTMLAttributes extends HTMLAttributes {
+  disabled?: Booleanish
+  label?: string
+}
+
+export interface OptionHTMLAttributes extends HTMLAttributes {
+  disabled?: Booleanish
+  label?: string
+  selected?: Booleanish
+  value?: any // we support :value to be bound to anything w/ v-model
+}
+
+export interface OutputHTMLAttributes extends HTMLAttributes {
+  for?: string
+  form?: string
+  name?: string
+}
+
+export interface ParamHTMLAttributes extends HTMLAttributes {
+  name?: string
+  value?: string | ReadonlyArray<string> | number
+}
+
+export interface ProgressHTMLAttributes extends HTMLAttributes {
+  max?: Numberish
+  value?: string | ReadonlyArray<string> | number
+}
+
+export interface ScriptHTMLAttributes extends HTMLAttributes {
+  async?: Booleanish
+  /** @deprecated */
+  charset?: string
+  crossorigin?: string
+  defer?: Booleanish
+  integrity?: string
+  nomodule?: Booleanish
+  referrerpolicy?: HTMLAttributeReferrerPolicy
+  nonce?: string
+  src?: string
+  type?: string
+}
+
+export interface SelectHTMLAttributes extends HTMLAttributes {
+  autocomplete?: string
+  autofocus?: Booleanish
+  disabled?: Booleanish
+  form?: string
+  multiple?: Booleanish
+  name?: string
+  required?: Booleanish
+  size?: Numberish
+  value?: any // we support :value to be bound to anything w/ v-model
+}
+
+export interface SourceHTMLAttributes extends HTMLAttributes {
+  media?: string
+  sizes?: string
+  src?: string
+  srcset?: string
+  type?: string
+}
+
+export interface StyleHTMLAttributes extends HTMLAttributes {
+  media?: string
+  nonce?: string
+  scoped?: Booleanish
+  type?: string
+}
+
+export interface TableHTMLAttributes extends HTMLAttributes {
+  cellpadding?: Numberish
+  cellspacing?: Numberish
+  summary?: string
+  width?: Numberish
+}
+
+export interface TextareaHTMLAttributes extends HTMLAttributes {
+  autocomplete?: string
+  autofocus?: Booleanish
+  cols?: Numberish
+  dirname?: string
+  disabled?: Booleanish
+  form?: string
+  maxlength?: Numberish
+  minlength?: Numberish
+  name?: string
+  placeholder?: string
+  readonly?: Booleanish
+  required?: Booleanish
+  rows?: Numberish
+  value?: string | ReadonlyArray<string> | number | null
+  wrap?: string
+}
+
+export interface TdHTMLAttributes extends HTMLAttributes {
+  align?: 'left' | 'center' | 'right' | 'justify' | 'char'
+  colspan?: Numberish
+  headers?: string
+  rowspan?: Numberish
+  scope?: string
+  abbr?: string
+  height?: Numberish
+  width?: Numberish
+  valign?: 'top' | 'middle' | 'bottom' | 'baseline'
+}
+
+export interface ThHTMLAttributes extends HTMLAttributes {
+  align?: 'left' | 'center' | 'right' | 'justify' | 'char'
+  colspan?: Numberish
+  headers?: string
+  rowspan?: Numberish
+  scope?: string
+  abbr?: string
+}
+
+export interface TimeHTMLAttributes extends HTMLAttributes {
+  datetime?: string
+}
+
+export interface TrackHTMLAttributes extends HTMLAttributes {
+  default?: Booleanish
+  kind?: string
+  label?: string
+  src?: string
+  srclang?: string
+}
+
+export interface VideoHTMLAttributes extends MediaHTMLAttributes {
+  height?: Numberish
+  playsinline?: Booleanish
+  poster?: string
+  width?: Numberish
+  disablePictureInPicture?: Booleanish
+  disableRemotePlayback?: Booleanish
+}
+
+export interface WebViewHTMLAttributes extends HTMLAttributes {
+  allowfullscreen?: Booleanish
+  allowpopups?: Booleanish
+  autoFocus?: Booleanish
+  autosize?: Booleanish
+  blinkfeatures?: string
+  disableblinkfeatures?: string
+  disableguestresize?: Booleanish
+  disablewebsecurity?: Booleanish
+  guestinstance?: string
+  httpreferrer?: string
+  nodeintegration?: Booleanish
+  partition?: string
+  plugins?: Booleanish
+  preload?: string
+  src?: string
+  useragent?: string
+  webpreferences?: string
+}
+
+export interface SVGAttributes extends AriaAttributes, EventHandlers<Events> {
+  innerHTML?: string
+
+  /**
+   * SVG Styling Attributes
+   * @see https://www.w3.org/TR/SVG/styling.html#ElementSpecificStyling
+   */
+  class?: any
+  style?: StyleValue
+
+  color?: string
+  height?: Numberish
+  id?: string
+  lang?: string
+  max?: Numberish
+  media?: string
+  method?: string
+  min?: Numberish
+  name?: string
+  target?: string
+  type?: string
+  width?: Numberish
+
+  // Other HTML properties supported by SVG elements in browsers
+  role?: string
+  tabindex?: Numberish
+  crossOrigin?: 'anonymous' | 'use-credentials' | ''
+
+  // SVG Specific attributes
+  'accent-height'?: Numberish
+  accumulate?: 'none' | 'sum'
+  additive?: 'replace' | 'sum'
+  'alignment-baseline'?:
+    | 'auto'
+    | 'baseline'
+    | 'before-edge'
+    | 'text-before-edge'
+    | 'middle'
+    | 'central'
+    | 'after-edge'
+    | 'text-after-edge'
+    | 'ideographic'
+    | 'alphabetic'
+    | 'hanging'
+    | 'mathematical'
+    | 'inherit'
+  allowReorder?: 'no' | 'yes'
+  alphabetic?: Numberish
+  amplitude?: Numberish
+  'arabic-form'?: 'initial' | 'medial' | 'terminal' | 'isolated'
+  ascent?: Numberish
+  attributeName?: string
+  attributeType?: string
+  autoReverse?: Numberish
+  azimuth?: Numberish
+  baseFrequency?: Numberish
+  'baseline-shift'?: Numberish
+  baseProfile?: Numberish
+  bbox?: Numberish
+  begin?: Numberish
+  bias?: Numberish
+  by?: Numberish
+  calcMode?: Numberish
+  'cap-height'?: Numberish
+  clip?: Numberish
+  'clip-path'?: string
+  clipPathUnits?: Numberish
+  'clip-rule'?: Numberish
+  'color-interpolation'?: Numberish
+  'color-interpolation-filters'?: 'auto' | 'sRGB' | 'linearRGB' | 'inherit'
+  'color-profile'?: Numberish
+  'color-rendering'?: Numberish
+  contentScriptType?: Numberish
+  contentStyleType?: Numberish
+  cursor?: Numberish
+  cx?: Numberish
+  cy?: Numberish
+  d?: string
+  decelerate?: Numberish
+  descent?: Numberish
+  diffuseConstant?: Numberish
+  direction?: Numberish
+  display?: Numberish
+  divisor?: Numberish
+  'dominant-baseline'?: Numberish
+  dur?: Numberish
+  dx?: Numberish
+  dy?: Numberish
+  edgeMode?: Numberish
+  elevation?: Numberish
+  'enable-background'?: Numberish
+  end?: Numberish
+  exponent?: Numberish
+  externalResourcesRequired?: Numberish
+  fill?: string
+  'fill-opacity'?: Numberish
+  'fill-rule'?: 'nonzero' | 'evenodd' | 'inherit'
+  filter?: string
+  filterRes?: Numberish
+  filterUnits?: Numberish
+  'flood-color'?: Numberish
+  'flood-opacity'?: Numberish
+  focusable?: Numberish
+  'font-family'?: string
+  'font-size'?: Numberish
+  'font-size-adjust'?: Numberish
+  'font-stretch'?: Numberish
+  'font-style'?: Numberish
+  'font-variant'?: Numberish
+  'font-weight'?: Numberish
+  format?: Numberish
+  from?: Numberish
+  fx?: Numberish
+  fy?: Numberish
+  g1?: Numberish
+  g2?: Numberish
+  'glyph-name'?: Numberish
+  'glyph-orientation-horizontal'?: Numberish
+  'glyph-orientation-vertical'?: Numberish
+  glyphRef?: Numberish
+  gradientTransform?: string
+  gradientUnits?: string
+  hanging?: Numberish
+  'horiz-adv-x'?: Numberish
+  'horiz-origin-x'?: Numberish
+  href?: string
+  ideographic?: Numberish
+  'image-rendering'?: Numberish
+  in2?: Numberish
+  in?: string
+  intercept?: Numberish
+  k1?: Numberish
+  k2?: Numberish
+  k3?: Numberish
+  k4?: Numberish
+  k?: Numberish
+  kernelMatrix?: Numberish
+  kernelUnitLength?: Numberish
+  kerning?: Numberish
+  keyPoints?: Numberish
+  keySplines?: Numberish
+  keyTimes?: Numberish
+  lengthAdjust?: Numberish
+  'letter-spacing'?: Numberish
+  'lighting-color'?: Numberish
+  limitingConeAngle?: Numberish
+  local?: Numberish
+  'marker-end'?: string
+  markerHeight?: Numberish
+  'marker-mid'?: string
+  'marker-start'?: string
+  markerUnits?: Numberish
+  markerWidth?: Numberish
+  mask?: string
+  maskContentUnits?: Numberish
+  maskUnits?: Numberish
+  mathematical?: Numberish
+  mode?: Numberish
+  numOctaves?: Numberish
+  offset?: Numberish
+  opacity?: Numberish
+  operator?: Numberish
+  order?: Numberish
+  orient?: Numberish
+  orientation?: Numberish
+  origin?: Numberish
+  overflow?: Numberish
+  'overline-position'?: Numberish
+  'overline-thickness'?: Numberish
+  'paint-order'?: Numberish
+  'panose-1'?: Numberish
+  pathLength?: Numberish
+  patternContentUnits?: string
+  patternTransform?: Numberish
+  patternUnits?: string
+  'pointer-events'?: Numberish
+  points?: string
+  pointsAtX?: Numberish
+  pointsAtY?: Numberish
+  pointsAtZ?: Numberish
+  preserveAlpha?: Numberish
+  preserveAspectRatio?: string
+  primitiveUnits?: Numberish
+  r?: Numberish
+  radius?: Numberish
+  refX?: Numberish
+  refY?: Numberish
+  renderingIntent?: Numberish
+  repeatCount?: Numberish
+  repeatDur?: Numberish
+  requiredExtensions?: Numberish
+  requiredFeatures?: Numberish
+  restart?: Numberish
+  result?: string
+  rotate?: Numberish
+  rx?: Numberish
+  ry?: Numberish
+  scale?: Numberish
+  seed?: Numberish
+  'shape-rendering'?: Numberish
+  slope?: Numberish
+  spacing?: Numberish
+  specularConstant?: Numberish
+  specularExponent?: Numberish
+  speed?: Numberish
+  spreadMethod?: string
+  startOffset?: Numberish
+  stdDeviation?: Numberish
+  stemh?: Numberish
+  stemv?: Numberish
+  stitchTiles?: Numberish
+  'stop-color'?: string
+  'stop-opacity'?: Numberish
+  'strikethrough-position'?: Numberish
+  'strikethrough-thickness'?: Numberish
+  string?: Numberish
+  stroke?: string
+  'stroke-dasharray'?: Numberish
+  'stroke-dashoffset'?: Numberish
+  'stroke-linecap'?: 'butt' | 'round' | 'square' | 'inherit'
+  'stroke-linejoin'?: 'miter' | 'round' | 'bevel' | 'inherit'
+  'stroke-miterlimit'?: Numberish
+  'stroke-opacity'?: Numberish
+  'stroke-width'?: Numberish
+  surfaceScale?: Numberish
+  systemLanguage?: Numberish
+  tableValues?: Numberish
+  targetX?: Numberish
+  targetY?: Numberish
+  'text-anchor'?: string
+  'text-decoration'?: Numberish
+  textLength?: Numberish
+  'text-rendering'?: Numberish
+  to?: Numberish
+  transform?: string
+  u1?: Numberish
+  u2?: Numberish
+  'underline-position'?: Numberish
+  'underline-thickness'?: Numberish
+  unicode?: Numberish
+  'unicode-bidi'?: Numberish
+  'unicode-range'?: Numberish
+  'unitsPer-em'?: Numberish
+  'v-alphabetic'?: Numberish
+  values?: string
+  'vector-effect'?: Numberish
+  version?: string
+  'vert-adv-y'?: Numberish
+  'vert-origin-x'?: Numberish
+  'vert-origin-y'?: Numberish
+  'v-hanging'?: Numberish
+  'v-ideographic'?: Numberish
+  viewBox?: string
+  viewTarget?: Numberish
+  visibility?: Numberish
+  'v-mathematical'?: Numberish
+  widths?: Numberish
+  'word-spacing'?: Numberish
+  'writing-mode'?: Numberish
+  x1?: Numberish
+  x2?: Numberish
+  x?: Numberish
+  xChannelSelector?: string
+  'x-height'?: Numberish
+  xlinkActuate?: string
+  xlinkArcrole?: string
+  xlinkHref?: string
+  xlinkRole?: string
+  xlinkShow?: string
+  xlinkTitle?: string
+  xlinkType?: string
+  xmlns?: string
+  xmlnsXlink?: string
+  y1?: Numberish
+  y2?: Numberish
+  y?: Numberish
+  yChannelSelector?: string
+  z?: Numberish
+  zoomAndPan?: string
+}
+
+export interface IntrinsicElementAttributes {
+  a: AnchorHTMLAttributes
+  abbr: HTMLAttributes
+  address: HTMLAttributes
+  area: AreaHTMLAttributes
+  article: HTMLAttributes
+  aside: HTMLAttributes
+  audio: AudioHTMLAttributes
+  b: HTMLAttributes
+  base: BaseHTMLAttributes
+  bdi: HTMLAttributes
+  bdo: HTMLAttributes
+  blockquote: BlockquoteHTMLAttributes
+  body: HTMLAttributes
+  br: HTMLAttributes
+  button: ButtonHTMLAttributes
+  canvas: CanvasHTMLAttributes
+  caption: HTMLAttributes
+  cite: HTMLAttributes
+  code: HTMLAttributes
+  col: ColHTMLAttributes
+  colgroup: ColgroupHTMLAttributes
+  data: DataHTMLAttributes
+  datalist: HTMLAttributes
+  dd: HTMLAttributes
+  del: DelHTMLAttributes
+  details: DetailsHTMLAttributes
+  dfn: HTMLAttributes
+  dialog: DialogHTMLAttributes
+  div: HTMLAttributes
+  dl: HTMLAttributes
+  dt: HTMLAttributes
+  em: HTMLAttributes
+  embed: EmbedHTMLAttributes
+  fieldset: FieldsetHTMLAttributes
+  figcaption: HTMLAttributes
+  figure: HTMLAttributes
+  footer: HTMLAttributes
+  form: FormHTMLAttributes
+  h1: HTMLAttributes
+  h2: HTMLAttributes
+  h3: HTMLAttributes
+  h4: HTMLAttributes
+  h5: HTMLAttributes
+  h6: HTMLAttributes
+  head: HTMLAttributes
+  header: HTMLAttributes
+  hgroup: HTMLAttributes
+  hr: HTMLAttributes
+  html: HtmlHTMLAttributes
+  i: HTMLAttributes
+  iframe: IframeHTMLAttributes
+  img: ImgHTMLAttributes
+  input: InputHTMLAttributes
+  ins: InsHTMLAttributes
+  kbd: HTMLAttributes
+  keygen: KeygenHTMLAttributes
+  label: LabelHTMLAttributes
+  legend: HTMLAttributes
+  li: LiHTMLAttributes
+  link: LinkHTMLAttributes
+  main: HTMLAttributes
+  map: MapHTMLAttributes
+  mark: HTMLAttributes
+  menu: MenuHTMLAttributes
+  meta: MetaHTMLAttributes
+  meter: MeterHTMLAttributes
+  nav: HTMLAttributes
+  noindex: HTMLAttributes
+  noscript: HTMLAttributes
+  object: ObjectHTMLAttributes
+  ol: OlHTMLAttributes
+  optgroup: OptgroupHTMLAttributes
+  option: OptionHTMLAttributes
+  output: OutputHTMLAttributes
+  p: HTMLAttributes
+  param: ParamHTMLAttributes
+  picture: HTMLAttributes
+  pre: HTMLAttributes
+  progress: ProgressHTMLAttributes
+  q: QuoteHTMLAttributes
+  rp: HTMLAttributes
+  rt: HTMLAttributes
+  ruby: HTMLAttributes
+  s: HTMLAttributes
+  samp: HTMLAttributes
+  script: ScriptHTMLAttributes
+  section: HTMLAttributes
+  select: SelectHTMLAttributes
+  small: HTMLAttributes
+  source: SourceHTMLAttributes
+  span: HTMLAttributes
+  strong: HTMLAttributes
+  style: StyleHTMLAttributes
+  sub: HTMLAttributes
+  summary: HTMLAttributes
+  sup: HTMLAttributes
+  table: TableHTMLAttributes
+  template: HTMLAttributes
+  tbody: HTMLAttributes
+  td: TdHTMLAttributes
+  textarea: TextareaHTMLAttributes
+  tfoot: HTMLAttributes
+  th: ThHTMLAttributes
+  thead: HTMLAttributes
+  time: TimeHTMLAttributes
+  title: HTMLAttributes
+  tr: HTMLAttributes
+  track: TrackHTMLAttributes
+  u: HTMLAttributes
+  ul: HTMLAttributes
+  var: HTMLAttributes
+  video: VideoHTMLAttributes
+  wbr: HTMLAttributes
+  webview: WebViewHTMLAttributes
+
+  // SVG
+  svg: SVGAttributes
+
+  animate: SVGAttributes
+  animateMotion: SVGAttributes
+  animateTransform: SVGAttributes
+  circle: SVGAttributes
+  clipPath: SVGAttributes
+  defs: SVGAttributes
+  desc: SVGAttributes
+  ellipse: SVGAttributes
+  feBlend: SVGAttributes
+  feColorMatrix: SVGAttributes
+  feComponentTransfer: SVGAttributes
+  feComposite: SVGAttributes
+  feConvolveMatrix: SVGAttributes
+  feDiffuseLighting: SVGAttributes
+  feDisplacementMap: SVGAttributes
+  feDistantLight: SVGAttributes
+  feDropShadow: SVGAttributes
+  feFlood: SVGAttributes
+  feFuncA: SVGAttributes
+  feFuncB: SVGAttributes
+  feFuncG: SVGAttributes
+  feFuncR: SVGAttributes
+  feGaussianBlur: SVGAttributes
+  feImage: SVGAttributes
+  feMerge: SVGAttributes
+  feMergeNode: SVGAttributes
+  feMorphology: SVGAttributes
+  feOffset: SVGAttributes
+  fePointLight: SVGAttributes
+  feSpecularLighting: SVGAttributes
+  feSpotLight: SVGAttributes
+  feTile: SVGAttributes
+  feTurbulence: SVGAttributes
+  filter: SVGAttributes
+  foreignObject: SVGAttributes
+  g: SVGAttributes
+  image: SVGAttributes
+  line: SVGAttributes
+  linearGradient: SVGAttributes
+  marker: SVGAttributes
+  mask: SVGAttributes
+  metadata: SVGAttributes
+  mpath: SVGAttributes
+  path: SVGAttributes
+  pattern: SVGAttributes
+  polygon: SVGAttributes
+  polyline: SVGAttributes
+  radialGradient: SVGAttributes
+  rect: SVGAttributes
+  stop: SVGAttributes
+  switch: SVGAttributes
+  symbol: SVGAttributes
+  text: SVGAttributes
+  textPath: SVGAttributes
+  tspan: SVGAttributes
+  use: SVGAttributes
+  view: SVGAttributes
+}
+
+export interface Events {
+  // clipboard events
+  onCopy: ClipboardEvent
+  onCut: ClipboardEvent
+  onPaste: ClipboardEvent
+
+  // composition events
+  onCompositionend: CompositionEvent
+  onCompositionstart: CompositionEvent
+  onCompositionupdate: CompositionEvent
+
+  // drag drop events
+  onDrag: DragEvent
+  onDragend: DragEvent
+  onDragenter: DragEvent
+  onDragexit: DragEvent
+  onDragleave: DragEvent
+  onDragover: DragEvent
+  onDragstart: DragEvent
+  onDrop: DragEvent
+
+  // focus events
+  onFocus: FocusEvent
+  onFocusin: FocusEvent
+  onFocusout: FocusEvent
+  onBlur: FocusEvent
+
+  // form events
+  onChange: Event
+  onBeforeinput: Event
+  onInput: Event
+  onReset: Event
+  onSubmit: Event
+  onInvalid: Event
+
+  // image events
+  onLoad: Event
+  onError: Event
+
+  // keyboard events
+  onKeydown: KeyboardEvent
+  onKeypress: KeyboardEvent
+  onKeyup: KeyboardEvent
+
+  // mouse events
+  onAuxclick: MouseEvent
+  onClick: MouseEvent
+  onContextmenu: MouseEvent
+  onDblclick: MouseEvent
+  onMousedown: MouseEvent
+  onMouseenter: MouseEvent
+  onMouseleave: MouseEvent
+  onMousemove: MouseEvent
+  onMouseout: MouseEvent
+  onMouseover: MouseEvent
+  onMouseup: MouseEvent
+
+  // media events
+  onAbort: Event
+  onCanplay: Event
+  onCanplaythrough: Event
+  onDurationchange: Event
+  onEmptied: Event
+  onEncrypted: Event
+  onEnded: Event
+  onLoadeddata: Event
+  onLoadedmetadata: Event
+  onLoadstart: Event
+  onPause: Event
+  onPlay: Event
+  onPlaying: Event
+  onProgress: Event
+  onRatechange: Event
+  onSeeked: Event
+  onSeeking: Event
+  onStalled: Event
+  onSuspend: Event
+  onTimeupdate: Event
+  onVolumechange: Event
+  onWaiting: Event
+
+  // selection events
+  onSelect: Event
+
+  // scroll events
+  onScroll: Event
+  onScrollend: Event
+
+  // touch events
+  onTouchcancel: TouchEvent
+  onTouchend: TouchEvent
+  onTouchmove: TouchEvent
+  onTouchstart: TouchEvent
+
+  // pointer events
+  onPointerdown: PointerEvent
+  onPointermove: PointerEvent
+  onPointerup: PointerEvent
+  onPointercancel: PointerEvent
+  onPointerenter: PointerEvent
+  onPointerleave: PointerEvent
+  onPointerover: PointerEvent
+  onPointerout: PointerEvent
+
+  // wheel events
+  onWheel: WheelEvent
+
+  // animation events
+  onAnimationstart: AnimationEvent
+  onAnimationend: AnimationEvent
+  onAnimationiteration: AnimationEvent
+
+  // transition events
+  onTransitionend: TransitionEvent
+  onTransitionstart: TransitionEvent
+}
+
+type EventHandlers<E> = {
+  [K in keyof E]?: E[K] extends (...args: any) => any
+    ? E[K]
+    : (payload: E[K]) => void
+}
+
+import type { VNodeRef } from '@vue/runtime-core'
+
+export type ReservedProps = {
+  key?: string | number | symbol
+  ref?: VNodeRef
+  ref_for?: boolean
+  ref_key?: string
+}
+
+export type NativeElements = {
+  [K in keyof IntrinsicElementAttributes]: IntrinsicElementAttributes[K] &
+    ReservedProps
+}
+
+=== End/Start of File ===
+File: ./src/modules/attrs.ts
+import {
+  NOOP,
+  includeBooleanAttr,
+  isSpecialBooleanAttr,
+  makeMap,
+} from '@vue/shared'
+import {
+  type ComponentInternalInstance,
+  DeprecationTypes,
+  compatUtils,
+} from '@vue/runtime-core'
+
+export const xlinkNS = 'http://www.w3.org/1999/xlink'
+
+export function patchAttr(
+  el: Element,
+  key: string,
+  value: any,
+  isSVG: boolean,
+  instance?: ComponentInternalInstance | null,
+) {
+  if (isSVG && key.startsWith('xlink:')) {
+    if (value == null) {
+      el.removeAttributeNS(xlinkNS, key.slice(6, key.length))
+    } else {
+      el.setAttributeNS(xlinkNS, key, value)
+    }
+  } else {
+    if (__COMPAT__ && compatCoerceAttr(el, key, value, instance)) {
+      return
+    }
+
+    // note we are only checking boolean attributes that don't have a
+    // corresponding dom prop of the same name here.
+    const isBoolean = isSpecialBooleanAttr(key)
+    if (value == null || (isBoolean && !includeBooleanAttr(value))) {
+      el.removeAttribute(key)
+    } else {
+      el.setAttribute(key, isBoolean ? '' : value)
+    }
+  }
+}
+
+// 2.x compat
+const isEnumeratedAttr = __COMPAT__
+  ? /*#__PURE__*/ makeMap('contenteditable,draggable,spellcheck')
+  : NOOP
+
+export function compatCoerceAttr(
+  el: Element,
+  key: string,
+  value: unknown,
+  instance: ComponentInternalInstance | null = null,
+): boolean {
+  if (isEnumeratedAttr(key)) {
+    const v2CoercedValue =
+      value === null
+        ? 'false'
+        : typeof value !== 'boolean' && value !== undefined
+          ? 'true'
+          : null
+    if (
+      v2CoercedValue &&
+      compatUtils.softAssertCompatEnabled(
+        DeprecationTypes.ATTR_ENUMERATED_COERCION,
+        instance,
+        key,
+        value,
+        v2CoercedValue,
+      )
+    ) {
+      el.setAttribute(key, v2CoercedValue)
+      return true
+    }
+  } else if (
+    value === false &&
+    !isSpecialBooleanAttr(key) &&
+    compatUtils.softAssertCompatEnabled(
+      DeprecationTypes.ATTR_FALSE_VALUE,
+      instance,
+      key,
+    )
+  ) {
+    el.removeAttribute(key)
+    return true
+  }
+  return false
+}
+
+=== End/Start of File ===
+File: ./src/modules/class.ts
+import { type ElementWithTransition, vtcKey } from '../components/Transition'
+
+// compiler should normalize class + :class bindings on the same element
+// into a single binding ['staticClass', dynamic]
+export function patchClass(el: Element, value: string | null, isSVG: boolean) {
+  // directly setting className should be faster than setAttribute in theory
+  // if this is an element during a transition, take the temporary transition
+  // classes into account.
+  const transitionClasses = (el as ElementWithTransition)[vtcKey]
+  if (transitionClasses) {
+    value = (
+      value ? [value, ...transitionClasses] : [...transitionClasses]
+    ).join(' ')
+  }
+  if (value == null) {
+    el.removeAttribute('class')
+  } else if (isSVG) {
+    el.setAttribute('class', value)
+  } else {
+    el.className = value
+  }
+}
+
+=== End/Start of File ===
+File: ./src/modules/events.ts
+import { NOOP, hyphenate, isArray, isFunction } from '@vue/shared'
+import {
+  type ComponentInternalInstance,
+  ErrorCodes,
+  callWithAsyncErrorHandling,
+  warn,
+} from '@vue/runtime-core'
+
+interface Invoker extends EventListener {
+  value: EventValue
+  attached: number
+}
+
+type EventValue = Function | Function[]
+
+export function addEventListener(
+  el: Element,
+  event: string,
+  handler: EventListener,
+  options?: EventListenerOptions,
+) {
+  el.addEventListener(event, handler, options)
+}
+
+export function removeEventListener(
+  el: Element,
+  event: string,
+  handler: EventListener,
+  options?: EventListenerOptions,
+) {
+  el.removeEventListener(event, handler, options)
+}
+
+const veiKey = Symbol('_vei')
+
+export function patchEvent(
+  el: Element & { [veiKey]?: Record<string, Invoker | undefined> },
+  rawName: string,
+  prevValue: EventValue | null,
+  nextValue: EventValue | unknown,
+  instance: ComponentInternalInstance | null = null,
+) {
+  // vei = vue event invokers
+  const invokers = el[veiKey] || (el[veiKey] = {})
+  const existingInvoker = invokers[rawName]
+  if (nextValue && existingInvoker) {
+    // patch
+    existingInvoker.value = __DEV__
+      ? sanitizeEventValue(nextValue, rawName)
+      : (nextValue as EventValue)
+  } else {
+    const [name, options] = parseName(rawName)
+    if (nextValue) {
+      // add
+      const invoker = (invokers[rawName] = createInvoker(
+        __DEV__
+          ? sanitizeEventValue(nextValue, rawName)
+          : (nextValue as EventValue),
+        instance,
+      ))
+      addEventListener(el, name, invoker, options)
+    } else if (existingInvoker) {
+      // remove
+      removeEventListener(el, name, existingInvoker, options)
+      invokers[rawName] = undefined
+    }
+  }
+}
+
+const optionsModifierRE = /(?:Once|Passive|Capture)$/
+
+function parseName(name: string): [string, EventListenerOptions | undefined] {
+  let options: EventListenerOptions | undefined
+  if (optionsModifierRE.test(name)) {
+    options = {}
+    let m
+    while ((m = name.match(optionsModifierRE))) {
+      name = name.slice(0, name.length - m[0].length)
+      ;(options as any)[m[0].toLowerCase()] = true
+    }
+  }
+  const event = name[2] === ':' ? name.slice(3) : hyphenate(name.slice(2))
+  return [event, options]
+}
+
+// To avoid the overhead of repeatedly calling Date.now(), we cache
+// and use the same timestamp for all event listeners attached in the same tick.
+let cachedNow: number = 0
+const p = /*#__PURE__*/ Promise.resolve()
+const getNow = () =>
+  cachedNow || (p.then(() => (cachedNow = 0)), (cachedNow = Date.now()))
+
+function createInvoker(
+  initialValue: EventValue,
+  instance: ComponentInternalInstance | null,
+) {
+  const invoker: Invoker = (e: Event & { _vts?: number }) => {
+    // async edge case vuejs/vue#6566
+    // inner click event triggers patch, event handler
+    // attached to outer element during patch, and triggered again. This
+    // happens because browsers fire microtask ticks between event propagation.
+    // this no longer happens for templates in Vue 3, but could still be
+    // theoretically possible for hand-written render functions.
+    // the solution: we save the timestamp when a handler is attached,
+    // and also attach the timestamp to any event that was handled by vue
+    // for the first time (to avoid inconsistent event timestamp implementations
+    // or events fired from iframes, e.g. #2513)
+    // The handler would only fire if the event passed to it was fired
+    // AFTER it was attached.
+    if (!e._vts) {
+      e._vts = Date.now()
+    } else if (e._vts <= invoker.attached) {
+      return
+    }
+    callWithAsyncErrorHandling(
+      patchStopImmediatePropagation(e, invoker.value),
+      instance,
+      ErrorCodes.NATIVE_EVENT_HANDLER,
+      [e],
+    )
+  }
+  invoker.value = initialValue
+  invoker.attached = getNow()
+  return invoker
+}
+
+function sanitizeEventValue(value: unknown, propName: string): EventValue {
+  if (isFunction(value) || isArray(value)) {
+    return value as EventValue
+  }
+  warn(
+    `Wrong type passed as event handler to ${propName} - did you forget @ or : ` +
+      `in front of your prop?\nExpected function or array of functions, received type ${typeof value}.`,
+  )
+  return NOOP
+}
+
+function patchStopImmediatePropagation(
+  e: Event,
+  value: EventValue,
+): EventValue {
+  if (isArray(value)) {
+    const originalStop = e.stopImmediatePropagation
+    e.stopImmediatePropagation = () => {
+      originalStop.call(e)
+      ;(e as any)._stopped = true
+    }
+    return (value as Function[]).map(
+      fn => (e: Event) => !(e as any)._stopped && fn && fn(e),
+    )
+  } else {
+    return value
+  }
+}
+
+=== End/Start of File ===
+File: ./src/modules/props.ts
+// __UNSAFE__
+// Reason: potentially setting innerHTML.
+// This can come from explicit usage of v-html or innerHTML as a prop in render
+
+import { DeprecationTypes, compatUtils, warn } from '@vue/runtime-core'
+import { includeBooleanAttr } from '@vue/shared'
+
+// functions. The user is responsible for using them with only trusted content.
+export function patchDOMProp(
+  el: any,
+  key: string,
+  value: any,
+  // the following args are passed only due to potential innerHTML/textContent
+  // overriding existing VNodes, in which case the old tree must be properly
+  // unmounted.
+  prevChildren: any,
+  parentComponent: any,
+  parentSuspense: any,
+  unmountChildren: any,
+) {
+  if (key === 'innerHTML' || key === 'textContent') {
+    if (prevChildren) {
+      unmountChildren(prevChildren, parentComponent, parentSuspense)
+    }
+    el[key] = value == null ? '' : value
+    return
+  }
+
+  const tag = el.tagName
+
+  if (
+    key === 'value' &&
+    tag !== 'PROGRESS' &&
+    // custom elements may use _value internally
+    !tag.includes('-')
+  ) {
+    // #4956: <option> value will fallback to its text content so we need to
+    // compare against its attribute value instead.
+    const oldValue =
+      tag === 'OPTION' ? el.getAttribute('value') || '' : el.value
+    const newValue = value == null ? '' : value
+    if (oldValue !== newValue || !('_value' in el)) {
+      el.value = newValue
+    }
+    if (value == null) {
+      el.removeAttribute(key)
+    }
+    // store value as _value as well since
+    // non-string values will be stringified.
+    el._value = value
+    return
+  }
+
+  let needRemove = false
+  if (value === '' || value == null) {
+    const type = typeof el[key]
+    if (type === 'boolean') {
+      // e.g. <select multiple> compiles to { multiple: '' }
+      value = includeBooleanAttr(value)
+    } else if (value == null && type === 'string') {
+      // e.g. <div :id="null">
+      value = ''
+      needRemove = true
+    } else if (type === 'number') {
+      // e.g. <img :width="null">
+      value = 0
+      needRemove = true
+    }
+  } else {
+    if (
+      __COMPAT__ &&
+      value === false &&
+      compatUtils.isCompatEnabled(
+        DeprecationTypes.ATTR_FALSE_VALUE,
+        parentComponent,
+      )
+    ) {
+      const type = typeof el[key]
+      if (type === 'string' || type === 'number') {
+        __DEV__ &&
+          compatUtils.warnDeprecation(
+            DeprecationTypes.ATTR_FALSE_VALUE,
+            parentComponent,
+            key,
+          )
+        value = type === 'number' ? 0 : ''
+        needRemove = true
+      }
+    }
+  }
+
+  // some properties perform value validation and throw,
+  // some properties has getter, no setter, will error in 'use strict'
+  // eg. <select :type="null"></select> <select :willValidate="null"></select>
+  try {
+    el[key] = value
+  } catch (e: any) {
+    // do not warn if value is auto-coerced from nullish values
+    if (__DEV__ && !needRemove) {
+      warn(
+        `Failed setting prop "${key}" on <${tag.toLowerCase()}>: ` +
+          `value ${value} is invalid.`,
+        e,
+      )
+    }
+  }
+  needRemove && el.removeAttribute(key)
+}
+
+=== End/Start of File ===
+File: ./src/modules/style.ts
+import { capitalize, hyphenate, isArray, isString } from '@vue/shared'
+import { camelize, warn } from '@vue/runtime-core'
+import {
+  type VShowElement,
+  vShowHidden,
+  vShowOriginalDisplay,
+} from '../directives/vShow'
+import { CSS_VAR_TEXT } from '../helpers/useCssVars'
+
+type Style = string | Record<string, string | string[]> | null
+
+const displayRE = /(^|;)\s*display\s*:/
+
+export function patchStyle(el: Element, prev: Style, next: Style) {
+  const style = (el as HTMLElement).style
+  const isCssString = isString(next)
+  let hasControlledDisplay = false
+  if (next && !isCssString) {
+    if (prev) {
+      if (!isString(prev)) {
+        for (const key in prev) {
+          if (next[key] == null) {
+            setStyle(style, key, '')
+          }
+        }
+      } else {
+        for (const prevStyle of prev.split(';')) {
+          const key = prevStyle.slice(0, prevStyle.indexOf(':')).trim()
+          if (next[key] == null) {
+            setStyle(style, key, '')
+          }
+        }
+      }
+    }
+    for (const key in next) {
+      if (key === 'display') {
+        hasControlledDisplay = true
+      }
+      setStyle(style, key, next[key])
+    }
+  } else {
+    if (isCssString) {
+      if (prev !== next) {
+        // #9821
+        const cssVarText = (style as any)[CSS_VAR_TEXT]
+        if (cssVarText) {
+          ;(next as string) += ';' + cssVarText
+        }
+        style.cssText = next as string
+        hasControlledDisplay = displayRE.test(next)
+      }
+    } else if (prev) {
+      el.removeAttribute('style')
+    }
+  }
+  // indicates the element also has `v-show`.
+  if (vShowOriginalDisplay in el) {
+    // make v-show respect the current v-bind style display when shown
+    el[vShowOriginalDisplay] = hasControlledDisplay ? style.display : ''
+    // if v-show is in hidden state, v-show has higher priority
+    if ((el as VShowElement)[vShowHidden]) {
+      style.display = 'none'
+    }
+  }
+}
+
+const semicolonRE = /[^\\];\s*$/
+const importantRE = /\s*!important$/
+
+function setStyle(
+  style: CSSStyleDeclaration,
+  name: string,
+  val: string | string[],
+) {
+  if (isArray(val)) {
+    val.forEach(v => setStyle(style, name, v))
+  } else {
+    if (val == null) val = ''
+    if (__DEV__) {
+      if (semicolonRE.test(val)) {
+        warn(
+          `Unexpected semicolon at the end of '${name}' style value: '${val}'`,
+        )
+      }
+    }
+    if (name.startsWith('--')) {
+      // custom property definition
+      style.setProperty(name, val)
+    } else {
+      const prefixed = autoPrefix(style, name)
+      if (importantRE.test(val)) {
+        // !important
+        style.setProperty(
+          hyphenate(prefixed),
+          val.replace(importantRE, ''),
+          'important',
+        )
+      } else {
+        style[prefixed as any] = val
+      }
+    }
+  }
+}
+
+const prefixes = ['Webkit', 'Moz', 'ms']
+const prefixCache: Record<string, string> = {}
+
+function autoPrefix(style: CSSStyleDeclaration, rawName: string): string {
+  const cached = prefixCache[rawName]
+  if (cached) {
+    return cached
+  }
+  let name = camelize(rawName)
+  if (name !== 'filter' && name in style) {
+    return (prefixCache[rawName] = name)
+  }
+  name = capitalize(name)
+  for (let i = 0; i < prefixes.length; i++) {
+    const prefixed = prefixes[i] + name
+    if (prefixed in style) {
+      return (prefixCache[rawName] = prefixed)
+    }
+  }
+  return rawName
+}
+
+=== End/Start of File ===
+File: ./src/nodeOps.ts
+import type { RendererOptions } from '@vue/runtime-core'
+
+export const svgNS = 'http://www.w3.org/2000/svg'
+export const mathmlNS = 'http://www.w3.org/1998/Math/MathML'
+
+const doc = (typeof document !== 'undefined' ? document : null) as Document
+
+const templateContainer = doc && /*#__PURE__*/ doc.createElement('template')
+
+export const nodeOps: Omit<RendererOptions<Node, Element>, 'patchProp'> = {
+  insert: (child, parent, anchor) => {
+    parent.insertBefore(child, anchor || null)
+  },
+
+  remove: child => {
+    const parent = child.parentNode
+    if (parent) {
+      parent.removeChild(child)
+    }
+  },
+
+  createElement: (tag, namespace, is, props): Element => {
+    const el =
+      namespace === 'svg'
+        ? doc.createElementNS(svgNS, tag)
+        : namespace === 'mathml'
+          ? doc.createElementNS(mathmlNS, tag)
+          : doc.createElement(tag, is ? { is } : undefined)
+
+    if (tag === 'select' && props && props.multiple != null) {
+      ;(el as HTMLSelectElement).setAttribute('multiple', props.multiple)
+    }
+
+    return el
+  },
+
+  createText: text => doc.createTextNode(text),
+
+  createComment: text => doc.createComment(text),
+
+  setText: (node, text) => {
+    node.nodeValue = text
+  },
+
+  setElementText: (el, text) => {
+    el.textContent = text
+  },
+
+  parentNode: node => node.parentNode as Element | null,
+
+  nextSibling: node => node.nextSibling,
+
+  querySelector: selector => doc.querySelector(selector),
+
+  setScopeId(el, id) {
+    el.setAttribute(id, '')
+  },
+
+  // __UNSAFE__
+  // Reason: innerHTML.
+  // Static content here can only come from compiled templates.
+  // As long as the user only uses trusted templates, this is safe.
+  insertStaticContent(content, parent, anchor, namespace, start, end) {
+    // <parent> before | first ... last | anchor </parent>
+    const before = anchor ? anchor.previousSibling : parent.lastChild
+    // #5308 can only take cached path if:
+    // - has a single root node
+    // - nextSibling info is still available
+    if (start && (start === end || start.nextSibling)) {
+      // cached
+      while (true) {
+        parent.insertBefore(start!.cloneNode(true), anchor)
+        if (start === end || !(start = start!.nextSibling)) break
+      }
+    } else {
+      // fresh insert
+      templateContainer.innerHTML =
+        namespace === 'svg'
+          ? `<svg>${content}</svg>`
+          : namespace === 'mathml'
+            ? `<math>${content}</math>`
+            : content
+
+      const template = templateContainer.content
+      if (namespace === 'svg' || namespace === 'mathml') {
+        // remove outer svg/math wrapper
+        const wrapper = template.firstChild!
+        while (wrapper.firstChild) {
+          template.appendChild(wrapper.firstChild)
+        }
+        template.removeChild(wrapper)
+      }
+      parent.insertBefore(template, anchor)
+    }
+    return [
+      // first
+      before ? before.nextSibling! : parent.firstChild!,
+      // last
+      anchor ? anchor.previousSibling! : parent.lastChild!,
+    ]
+  },
+}
+
+=== End/Start of File ===
+File: ./src/patchProp.ts
+import { patchClass } from './modules/class'
+import { patchStyle } from './modules/style'
+import { patchAttr } from './modules/attrs'
+import { patchDOMProp } from './modules/props'
+import { patchEvent } from './modules/events'
+import { isFunction, isModelListener, isOn, isString } from '@vue/shared'
+import type { RendererOptions } from '@vue/runtime-core'
+
+const isNativeOn = (key: string) =>
+  key.charCodeAt(0) === 111 /* o */ &&
+  key.charCodeAt(1) === 110 /* n */ &&
+  // lowercase letter
+  key.charCodeAt(2) > 96 &&
+  key.charCodeAt(2) < 123
+
+type DOMRendererOptions = RendererOptions<Node, Element>
+
+export const patchProp: DOMRendererOptions['patchProp'] = (
+  el,
+  key,
+  prevValue,
+  nextValue,
+  namespace,
+  prevChildren,
+  parentComponent,
+  parentSuspense,
+  unmountChildren,
+) => {
+  const isSVG = namespace === 'svg'
+  if (key === 'class') {
+    patchClass(el, nextValue, isSVG)
+  } else if (key === 'style') {
+    patchStyle(el, prevValue, nextValue)
+  } else if (isOn(key)) {
+    // ignore v-model listeners
+    if (!isModelListener(key)) {
+      patchEvent(el, key, prevValue, nextValue, parentComponent)
+    }
+  } else if (
+    key[0] === '.'
+      ? ((key = key.slice(1)), true)
+      : key[0] === '^'
+        ? ((key = key.slice(1)), false)
+        : shouldSetAsProp(el, key, nextValue, isSVG)
+  ) {
+    patchDOMProp(
+      el,
+      key,
+      nextValue,
+      prevChildren,
+      parentComponent,
+      parentSuspense,
+      unmountChildren,
+    )
+  } else {
+    // special case for <input v-model type="checkbox"> with
+    // :true-value & :false-value
+    // store value as dom properties since non-string values will be
+    // stringified.
+    if (key === 'true-value') {
+      ;(el as any)._trueValue = nextValue
+    } else if (key === 'false-value') {
+      ;(el as any)._falseValue = nextValue
+    }
+    patchAttr(el, key, nextValue, isSVG, parentComponent)
+  }
+}
+
+function shouldSetAsProp(
+  el: Element,
+  key: string,
+  value: unknown,
+  isSVG: boolean,
+) {
+  if (isSVG) {
+    // most keys must be set as attribute on svg elements to work
+    // ...except innerHTML & textContent
+    if (key === 'innerHTML' || key === 'textContent') {
+      return true
+    }
+    // or native onclick with function values
+    if (key in el && isNativeOn(key) && isFunction(value)) {
+      return true
+    }
+    return false
+  }
+
+  // these are enumerated attrs, however their corresponding DOM properties
+  // are actually booleans - this leads to setting it with a string "false"
+  // value leading it to be coerced to `true`, so we need to always treat
+  // them as attributes.
+  // Note that `contentEditable` doesn't have this problem: its DOM
+  // property is also enumerated string values.
+  if (key === 'spellcheck' || key === 'draggable' || key === 'translate') {
+    return false
+  }
+
+  // #1787, #2840 form property on form elements is readonly and must be set as
+  // attribute.
+  if (key === 'form') {
+    return false
+  }
+
+  // #1526 <input list> must be set as attribute
+  if (key === 'list' && el.tagName === 'INPUT') {
+    return false
+  }
+
+  // #2766 <textarea type> must be set as attribute
+  if (key === 'type' && el.tagName === 'TEXTAREA') {
+    return false
+  }
+
+  // #8780 the width or height of embedded tags must be set as attribute
+  if (key === 'width' || key === 'height') {
+    const tag = el.tagName
+    if (
+      tag === 'IMG' ||
+      tag === 'VIDEO' ||
+      tag === 'CANVAS' ||
+      tag === 'SOURCE'
+    ) {
+      return false
+    }
+  }
+
+  // native onclick with string value, must be set as attribute
+  if (isNativeOn(key) && isString(value)) {
+    return false
+  }
+
+  return key in el
+}
+
+=== End/Start of File ===

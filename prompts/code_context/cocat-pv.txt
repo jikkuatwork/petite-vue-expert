@@ -1,0 +1,4160 @@
+Cocat - File Concatenation Tool
+Generated on: 2024-05-10 10:44:14 +0530
+
+Directory Structure:
+.
+├── CHANGELOG.md
+├── examples
+│   ├── commits.html
+│   ├── grid.html
+│   ├── markdown.html
+│   ├── svg.html
+│   ├── todomvc.html
+│   └── tree.html
+├── index.html
+├── LICENSE
+├── package.json
+├── README.md
+├── scripts
+│   └── release.js
+├── src
+│   ├── app.ts
+│   ├── block.ts
+│   ├── context.ts
+│   ├── directives
+│   │   ├── bind.ts
+│   │   ├── effect.ts
+│   │   ├── for.ts
+│   │   ├── html.ts
+│   │   ├── if.ts
+│   │   ├── index.ts
+│   │   ├── model.ts
+│   │   ├── on.ts
+│   │   ├── ref.ts
+│   │   ├── show.ts
+│   │   └── text.ts
+│   ├── eval.ts
+│   ├── index.ts
+│   ├── scheduler.ts
+│   ├── utils.ts
+│   └── walk.ts
+├── tests
+│   ├── bind.html
+│   ├── cloak.html
+│   ├── component.html
+│   ├── custom-delimiters.html
+│   ├── effect.html
+│   ├── for.html
+│   ├── html.html
+│   ├── if.html
+│   ├── model.html
+│   ├── multi-mount.html
+│   ├── once.html
+│   ├── on.html
+│   ├── pre.html
+│   ├── reactive.html
+│   ├── ref.html
+│   ├── scope.html
+│   ├── show.html
+│   └── text.html
+├── tsconfig.json
+└── vite.config.ts
+
+5 directories, 51 files
+
+=== End/Start of File ===
+File: ./.git/COMMIT_EDITMSG
+Update tests to use remote modules
+
+=== End/Start of File ===
+File: ./.git/HEAD
+ref: refs/heads/thin
+
+=== End/Start of File ===
+File: ./.git/config
+[core]
+	repositoryformatversion = 0
+	filemode = true
+	bare = false
+	logallrefupdates = true
+[remote "origin"]
+	url = git@github.com:vuejs/petite-vue.git
+	fetch = +refs/heads/*:refs/remotes/origin/*
+[branch "main"]
+	remote = origin
+	merge = refs/heads/main
+
+=== End/Start of File ===
+File: ./.git/description
+Unnamed repository; edit this file 'description' to name the repository.
+
+=== End/Start of File ===
+File: ./.git/hooks/applypatch-msg.sample
+#!/bin/sh
+#
+# An example hook script to check the commit log message taken by
+# applypatch from an e-mail message.
+#
+# The hook should exit with non-zero status after issuing an
+# appropriate message if it wants to stop the commit.  The hook is
+# allowed to edit the commit message file.
+#
+# To enable this hook, rename this file to "applypatch-msg".
+
+. git-sh-setup
+commitmsg="$(git rev-parse --git-path hooks/commit-msg)"
+test -x "$commitmsg" && exec "$commitmsg" ${1+"$@"}
+:
+
+=== End/Start of File ===
+File: ./.git/hooks/commit-msg.sample
+#!/bin/sh
+#
+# An example hook script to check the commit log message.
+# Called by "git commit" with one argument, the name of the file
+# that has the commit message.  The hook should exit with non-zero
+# status after issuing an appropriate message if it wants to stop the
+# commit.  The hook is allowed to edit the commit message file.
+#
+# To enable this hook, rename this file to "commit-msg".
+
+# Uncomment the below to add a Signed-off-by line to the message.
+# Doing this in a hook is a bad idea in general, but the prepare-commit-msg
+# hook is more suited to it.
+#
+# SOB=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
+# grep -qs "^$SOB" "$1" || echo "$SOB" >> "$1"
+
+# This example catches duplicate Signed-off-by lines.
+
+test "" = "$(grep '^Signed-off-by: ' "$1" |
+	 sort | uniq -c | sed -e '/^[ 	]*1[ 	]/d')" || {
+	echo >&2 Duplicate Signed-off-by lines.
+	exit 1
+}
+
+=== End/Start of File ===
+File: ./.git/hooks/fsmonitor-watchman.sample
+#!/usr/bin/perl
+
+use strict;
+use warnings;
+use IPC::Open2;
+
+# An example hook script to integrate Watchman
+# (https://facebook.github.io/watchman/) with git to speed up detecting
+# new and modified files.
+#
+# The hook is passed a version (currently 2) and last update token
+# formatted as a string and outputs to stdout a new update token and
+# all files that have been modified since the update token. Paths must
+# be relative to the root of the working tree and separated by a single NUL.
+#
+# To enable this hook, rename this file to "query-watchman" and set
+# 'git config core.fsmonitor .git/hooks/query-watchman'
+#
+my ($version, $last_update_token) = @ARGV;
+
+# Uncomment for debugging
+# print STDERR "$0 $version $last_update_token\n";
+
+# Check the hook interface version
+if ($version ne 2) {
+	die "Unsupported query-fsmonitor hook version '$version'.\n" .
+	    "Falling back to scanning...\n";
+}
+
+my $git_work_tree = get_working_dir();
+
+my $retry = 1;
+
+my $json_pkg;
+eval {
+	require JSON::XS;
+	$json_pkg = "JSON::XS";
+	1;
+} or do {
+	require JSON::PP;
+	$json_pkg = "JSON::PP";
+};
+
+launch_watchman();
+
+sub launch_watchman {
+	my $o = watchman_query();
+	if (is_work_tree_watched($o)) {
+		output_result($o->{clock}, @{$o->{files}});
+	}
+}
+
+sub output_result {
+	my ($clockid, @files) = @_;
+
+	# Uncomment for debugging watchman output
+	# open (my $fh, ">", ".git/watchman-output.out");
+	# binmode $fh, ":utf8";
+	# print $fh "$clockid\n@files\n";
+	# close $fh;
+
+	binmode STDOUT, ":utf8";
+	print $clockid;
+	print "\0";
+	local $, = "\0";
+	print @files;
+}
+
+sub watchman_clock {
+	my $response = qx/watchman clock "$git_work_tree"/;
+	die "Failed to get clock id on '$git_work_tree'.\n" .
+		"Falling back to scanning...\n" if $? != 0;
+
+	return $json_pkg->new->utf8->decode($response);
+}
+
+sub watchman_query {
+	my $pid = open2(\*CHLD_OUT, \*CHLD_IN, 'watchman -j --no-pretty')
+	or die "open2() failed: $!\n" .
+	"Falling back to scanning...\n";
+
+	# In the query expression below we're asking for names of files that
+	# changed since $last_update_token but not from the .git folder.
+	#
+	# To accomplish this, we're using the "since" generator to use the
+	# recency index to select candidate nodes and "fields" to limit the
+	# output to file names only. Then we're using the "expression" term to
+	# further constrain the results.
+	if (substr($last_update_token, 0, 1) eq "c") {
+		$last_update_token = "\"$last_update_token\"";
+	}
+	my $query = <<"	END";
+		["query", "$git_work_tree", {
+			"since": $last_update_token,
+			"fields": ["name"],
+			"expression": ["not", ["dirname", ".git"]]
+		}]
+	END
+
+	# Uncomment for debugging the watchman query
+	# open (my $fh, ">", ".git/watchman-query.json");
+	# print $fh $query;
+	# close $fh;
+
+	print CHLD_IN $query;
+	close CHLD_IN;
+	my $response = do {local $/; <CHLD_OUT>};
+
+	# Uncomment for debugging the watch response
+	# open ($fh, ">", ".git/watchman-response.json");
+	# print $fh $response;
+	# close $fh;
+
+	die "Watchman: command returned no output.\n" .
+	"Falling back to scanning...\n" if $response eq "";
+	die "Watchman: command returned invalid output: $response\n" .
+	"Falling back to scanning...\n" unless $response =~ /^\{/;
+
+	return $json_pkg->new->utf8->decode($response);
+}
+
+sub is_work_tree_watched {
+	my ($output) = @_;
+	my $error = $output->{error};
+	if ($retry > 0 and $error and $error =~ m/unable to resolve root .* directory (.*) is not watched/) {
+		$retry--;
+		my $response = qx/watchman watch "$git_work_tree"/;
+		die "Failed to make watchman watch '$git_work_tree'.\n" .
+		    "Falling back to scanning...\n" if $? != 0;
+		$output = $json_pkg->new->utf8->decode($response);
+		$error = $output->{error};
+		die "Watchman: $error.\n" .
+		"Falling back to scanning...\n" if $error;
+
+		# Uncomment for debugging watchman output
+		# open (my $fh, ">", ".git/watchman-output.out");
+		# close $fh;
+
+		# Watchman will always return all files on the first query so
+		# return the fast "everything is dirty" flag to git and do the
+		# Watchman query just to get it over with now so we won't pay
+		# the cost in git to look up each individual file.
+		my $o = watchman_clock();
+		$error = $output->{error};
+
+		die "Watchman: $error.\n" .
+		"Falling back to scanning...\n" if $error;
+
+		output_result($o->{clock}, ("/"));
+		$last_update_token = $o->{clock};
+
+		eval { launch_watchman() };
+		return 0;
+	}
+
+	die "Watchman: $error.\n" .
+	"Falling back to scanning...\n" if $error;
+
+	return 1;
+}
+
+sub get_working_dir {
+	my $working_dir;
+	if ($^O =~ 'msys' || $^O =~ 'cygwin') {
+		$working_dir = Win32::GetCwd();
+		$working_dir =~ tr/\\/\//;
+	} else {
+		require Cwd;
+		$working_dir = Cwd::cwd();
+	}
+
+	return $working_dir;
+}
+
+=== End/Start of File ===
+File: ./.git/hooks/post-update.sample
+#!/bin/sh
+#
+# An example hook script to prepare a packed repository for use over
+# dumb transports.
+#
+# To enable this hook, rename this file to "post-update".
+
+exec git update-server-info
+
+=== End/Start of File ===
+File: ./.git/hooks/pre-applypatch.sample
+#!/bin/sh
+#
+# An example hook script to verify what is about to be committed
+# by applypatch from an e-mail message.
+#
+# The hook should exit with non-zero status after issuing an
+# appropriate message if it wants to stop the commit.
+#
+# To enable this hook, rename this file to "pre-applypatch".
+
+. git-sh-setup
+precommit="$(git rev-parse --git-path hooks/pre-commit)"
+test -x "$precommit" && exec "$precommit" ${1+"$@"}
+:
+
+=== End/Start of File ===
+File: ./.git/hooks/pre-commit.sample
+#!/bin/sh
+#
+# An example hook script to verify what is about to be committed.
+# Called by "git commit" with no arguments.  The hook should
+# exit with non-zero status after issuing an appropriate message if
+# it wants to stop the commit.
+#
+# To enable this hook, rename this file to "pre-commit".
+
+if git rev-parse --verify HEAD >/dev/null 2>&1
+then
+	against=HEAD
+else
+	# Initial commit: diff against an empty tree object
+	against=$(git hash-object -t tree /dev/null)
+fi
+
+# If you want to allow non-ASCII filenames set this variable to true.
+allownonascii=$(git config --type=bool hooks.allownonascii)
+
+# Redirect output to stderr.
+exec 1>&2
+
+# Cross platform projects tend to avoid non-ASCII filenames; prevent
+# them from being added to the repository. We exploit the fact that the
+# printable range starts at the space character and ends with tilde.
+if [ "$allownonascii" != "true" ] &&
+	# Note that the use of brackets around a tr range is ok here, (it's
+	# even required, for portability to Solaris 10's /usr/bin/tr), since
+	# the square bracket bytes happen to fall in the designated range.
+	test $(git diff --cached --name-only --diff-filter=A -z $against |
+	  LC_ALL=C tr -d '[ -~]\0' | wc -c) != 0
+then
+	cat <<\EOF
+Error: Attempt to add a non-ASCII file name.
+
+This can cause problems if you want to work with people on other platforms.
+
+To be portable it is advisable to rename the file.
+
+If you know what you are doing you can disable this check using:
+
+  git config hooks.allownonascii true
+EOF
+	exit 1
+fi
+
+# If there are whitespace errors, print the offending file names and fail.
+exec git diff-index --check --cached $against --
+
+=== End/Start of File ===
+File: ./.git/hooks/pre-merge-commit.sample
+#!/bin/sh
+#
+# An example hook script to verify what is about to be committed.
+# Called by "git merge" with no arguments.  The hook should
+# exit with non-zero status after issuing an appropriate message to
+# stderr if it wants to stop the merge commit.
+#
+# To enable this hook, rename this file to "pre-merge-commit".
+
+. git-sh-setup
+test -x "$GIT_DIR/hooks/pre-commit" &&
+        exec "$GIT_DIR/hooks/pre-commit"
+:
+
+=== End/Start of File ===
+File: ./.git/hooks/pre-push.sample
+#!/bin/sh
+
+# An example hook script to verify what is about to be pushed.  Called by "git
+# push" after it has checked the remote status, but before anything has been
+# pushed.  If this script exits with a non-zero status nothing will be pushed.
+#
+# This hook is called with the following parameters:
+#
+# $1 -- Name of the remote to which the push is being done
+# $2 -- URL to which the push is being done
+#
+# If pushing without using a named remote those arguments will be equal.
+#
+# Information about the commits which are being pushed is supplied as lines to
+# the standard input in the form:
+#
+#   <local ref> <local oid> <remote ref> <remote oid>
+#
+# This sample shows how to prevent push of commits where the log message starts
+# with "WIP" (work in progress).
+
+remote="$1"
+url="$2"
+
+zero=$(git hash-object --stdin </dev/null | tr '[0-9a-f]' '0')
+
+while read local_ref local_oid remote_ref remote_oid
+do
+	if test "$local_oid" = "$zero"
+	then
+		# Handle delete
+		:
+	else
+		if test "$remote_oid" = "$zero"
+		then
+			# New branch, examine all commits
+			range="$local_oid"
+		else
+			# Update to existing branch, examine new commits
+			range="$remote_oid..$local_oid"
+		fi
+
+		# Check for WIP commit
+		commit=$(git rev-list -n 1 --grep '^WIP' "$range")
+		if test -n "$commit"
+		then
+			echo >&2 "Found WIP commit in $local_ref, not pushing"
+			exit 1
+		fi
+	fi
+done
+
+exit 0
+
+=== End/Start of File ===
+File: ./.git/hooks/pre-rebase.sample
+#!/bin/sh
+#
+# Copyright (c) 2006, 2008 Junio C Hamano
+#
+# The "pre-rebase" hook is run just before "git rebase" starts doing
+# its job, and can prevent the command from running by exiting with
+# non-zero status.
+#
+# The hook is called with the following parameters:
+#
+# $1 -- the upstream the series was forked from.
+# $2 -- the branch being rebased (or empty when rebasing the current branch).
+#
+# This sample shows how to prevent topic branches that are already
+# merged to 'next' branch from getting rebased, because allowing it
+# would result in rebasing already published history.
+
+publish=next
+basebranch="$1"
+if test "$#" = 2
+then
+	topic="refs/heads/$2"
+else
+	topic=`git symbolic-ref HEAD` ||
+	exit 0 ;# we do not interrupt rebasing detached HEAD
+fi
+
+case "$topic" in
+refs/heads/??/*)
+	;;
+*)
+	exit 0 ;# we do not interrupt others.
+	;;
+esac
+
+# Now we are dealing with a topic branch being rebased
+# on top of master.  Is it OK to rebase it?
+
+# Does the topic really exist?
+git show-ref -q "$topic" || {
+	echo >&2 "No such branch $topic"
+	exit 1
+}
+
+# Is topic fully merged to master?
+not_in_master=`git rev-list --pretty=oneline ^master "$topic"`
+if test -z "$not_in_master"
+then
+	echo >&2 "$topic is fully merged to master; better remove it."
+	exit 1 ;# we could allow it, but there is no point.
+fi
+
+# Is topic ever merged to next?  If so you should not be rebasing it.
+only_next_1=`git rev-list ^master "^$topic" ${publish} | sort`
+only_next_2=`git rev-list ^master           ${publish} | sort`
+if test "$only_next_1" = "$only_next_2"
+then
+	not_in_topic=`git rev-list "^$topic" master`
+	if test -z "$not_in_topic"
+	then
+		echo >&2 "$topic is already up to date with master"
+		exit 1 ;# we could allow it, but there is no point.
+	else
+		exit 0
+	fi
+else
+	not_in_next=`git rev-list --pretty=oneline ^${publish} "$topic"`
+	/usr/bin/perl -e '
+		my $topic = $ARGV[0];
+		my $msg = "* $topic has commits already merged to public branch:\n";
+		my (%not_in_next) = map {
+			/^([0-9a-f]+) /;
+			($1 => 1);
+		} split(/\n/, $ARGV[1]);
+		for my $elem (map {
+				/^([0-9a-f]+) (.*)$/;
+				[$1 => $2];
+			} split(/\n/, $ARGV[2])) {
+			if (!exists $not_in_next{$elem->[0]}) {
+				if ($msg) {
+					print STDERR $msg;
+					undef $msg;
+				}
+				print STDERR " $elem->[1]\n";
+			}
+		}
+	' "$topic" "$not_in_next" "$not_in_master"
+	exit 1
+fi
+
+<<\DOC_END
+
+This sample hook safeguards topic branches that have been
+published from being rewound.
+
+The workflow assumed here is:
+
+ * Once a topic branch forks from "master", "master" is never
+   merged into it again (either directly or indirectly).
+
+ * Once a topic branch is fully cooked and merged into "master",
+   it is deleted.  If you need to build on top of it to correct
+   earlier mistakes, a new topic branch is created by forking at
+   the tip of the "master".  This is not strictly necessary, but
+   it makes it easier to keep your history simple.
+
+ * Whenever you need to test or publish your changes to topic
+   branches, merge them into "next" branch.
+
+The script, being an example, hardcodes the publish branch name
+to be "next", but it is trivial to make it configurable via
+$GIT_DIR/config mechanism.
+
+With this workflow, you would want to know:
+
+(1) ... if a topic branch has ever been merged to "next".  Young
+    topic branches can have stupid mistakes you would rather
+    clean up before publishing, and things that have not been
+    merged into other branches can be easily rebased without
+    affecting other people.  But once it is published, you would
+    not want to rewind it.
+
+(2) ... if a topic branch has been fully merged to "master".
+    Then you can delete it.  More importantly, you should not
+    build on top of it -- other people may already want to
+    change things related to the topic as patches against your
+    "master", so if you need further changes, it is better to
+    fork the topic (perhaps with the same name) afresh from the
+    tip of "master".
+
+Let's look at this example:
+
+		   o---o---o---o---o---o---o---o---o---o "next"
+		  /       /           /           /
+		 /   a---a---b A     /           /
+		/   /               /           /
+	       /   /   c---c---c---c B         /
+	      /   /   /             \         /
+	     /   /   /   b---b C     \       /
+	    /   /   /   /             \     /
+    ---o---o---o---o---o---o---o---o---o---o---o "master"
+
+
+A, B and C are topic branches.
+
+ * A has one fix since it was merged up to "next".
+
+ * B has finished.  It has been fully merged up to "master" and "next",
+   and is ready to be deleted.
+
+ * C has not merged to "next" at all.
+
+We would want to allow C to be rebased, refuse A, and encourage
+B to be deleted.
+
+To compute (1):
+
+	git rev-list ^master ^topic next
+	git rev-list ^master        next
+
+	if these match, topic has not merged in next at all.
+
+To compute (2):
+
+	git rev-list master..topic
+
+	if this is empty, it is fully merged to "master".
+
+DOC_END
+
+=== End/Start of File ===
+File: ./.git/hooks/pre-receive.sample
+#!/bin/sh
+#
+# An example hook script to make use of push options.
+# The example simply echoes all push options that start with 'echoback='
+# and rejects all pushes when the "reject" push option is used.
+#
+# To enable this hook, rename this file to "pre-receive".
+
+if test -n "$GIT_PUSH_OPTION_COUNT"
+then
+	i=0
+	while test "$i" -lt "$GIT_PUSH_OPTION_COUNT"
+	do
+		eval "value=\$GIT_PUSH_OPTION_$i"
+		case "$value" in
+		echoback=*)
+			echo "echo from the pre-receive-hook: ${value#*=}" >&2
+			;;
+		reject)
+			exit 1
+		esac
+		i=$((i + 1))
+	done
+fi
+
+=== End/Start of File ===
+File: ./.git/hooks/prepare-commit-msg.sample
+#!/bin/sh
+#
+# An example hook script to prepare the commit log message.
+# Called by "git commit" with the name of the file that has the
+# commit message, followed by the description of the commit
+# message's source.  The hook's purpose is to edit the commit
+# message file.  If the hook fails with a non-zero status,
+# the commit is aborted.
+#
+# To enable this hook, rename this file to "prepare-commit-msg".
+
+# This hook includes three examples. The first one removes the
+# "# Please enter the commit message..." help message.
+#
+# The second includes the output of "git diff --name-status -r"
+# into the message, just before the "git status" output.  It is
+# commented because it doesn't cope with --amend or with squashed
+# commits.
+#
+# The third example adds a Signed-off-by line to the message, that can
+# still be edited.  This is rarely a good idea.
+
+COMMIT_MSG_FILE=$1
+COMMIT_SOURCE=$2
+SHA1=$3
+
+/usr/bin/perl -i.bak -ne 'print unless(m/^. Please enter the commit message/..m/^#$/)' "$COMMIT_MSG_FILE"
+
+# case "$COMMIT_SOURCE,$SHA1" in
+#  ,|template,)
+#    /usr/bin/perl -i.bak -pe '
+#       print "\n" . `git diff --cached --name-status -r`
+# 	 if /^#/ && $first++ == 0' "$COMMIT_MSG_FILE" ;;
+#  *) ;;
+# esac
+
+# SOB=$(git var GIT_COMMITTER_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
+# git interpret-trailers --in-place --trailer "$SOB" "$COMMIT_MSG_FILE"
+# if test -z "$COMMIT_SOURCE"
+# then
+#   /usr/bin/perl -i.bak -pe 'print "\n" if !$first_line++' "$COMMIT_MSG_FILE"
+# fi
+
+=== End/Start of File ===
+File: ./.git/hooks/push-to-checkout.sample
+#!/bin/sh
+
+# An example hook script to update a checked-out tree on a git push.
+#
+# This hook is invoked by git-receive-pack(1) when it reacts to git
+# push and updates reference(s) in its repository, and when the push
+# tries to update the branch that is currently checked out and the
+# receive.denyCurrentBranch configuration variable is set to
+# updateInstead.
+#
+# By default, such a push is refused if the working tree and the index
+# of the remote repository has any difference from the currently
+# checked out commit; when both the working tree and the index match
+# the current commit, they are updated to match the newly pushed tip
+# of the branch. This hook is to be used to override the default
+# behaviour; however the code below reimplements the default behaviour
+# as a starting point for convenient modification.
+#
+# The hook receives the commit with which the tip of the current
+# branch is going to be updated:
+commit=$1
+
+# It can exit with a non-zero status to refuse the push (when it does
+# so, it must not modify the index or the working tree).
+die () {
+	echo >&2 "$*"
+	exit 1
+}
+
+# Or it can make any necessary changes to the working tree and to the
+# index to bring them to the desired state when the tip of the current
+# branch is updated to the new commit, and exit with a zero status.
+#
+# For example, the hook can simply run git read-tree -u -m HEAD "$1"
+# in order to emulate git fetch that is run in the reverse direction
+# with git push, as the two-tree form of git read-tree -u -m is
+# essentially the same as git switch or git checkout that switches
+# branches while keeping the local changes in the working tree that do
+# not interfere with the difference between the branches.
+
+# The below is a more-or-less exact translation to shell of the C code
+# for the default behaviour for git's push-to-checkout hook defined in
+# the push_to_deploy() function in builtin/receive-pack.c.
+#
+# Note that the hook will be executed from the repository directory,
+# not from the working tree, so if you want to perform operations on
+# the working tree, you will have to adapt your code accordingly, e.g.
+# by adding "cd .." or using relative paths.
+
+if ! git update-index -q --ignore-submodules --refresh
+then
+	die "Up-to-date check failed"
+fi
+
+if ! git diff-files --quiet --ignore-submodules --
+then
+	die "Working directory has unstaged changes"
+fi
+
+# This is a rough translation of:
+#
+#   head_has_history() ? "HEAD" : EMPTY_TREE_SHA1_HEX
+if git cat-file -e HEAD 2>/dev/null
+then
+	head=HEAD
+else
+	head=$(git hash-object -t tree --stdin </dev/null)
+fi
+
+if ! git diff-index --quiet --cached --ignore-submodules $head --
+then
+	die "Working directory has staged changes"
+fi
+
+if ! git read-tree -u -m "$commit"
+then
+	die "Could not update working tree to new HEAD"
+fi
+
+=== End/Start of File ===
+File: ./.git/hooks/update.sample
+#!/bin/sh
+#
+# An example hook script to block unannotated tags from entering.
+# Called by "git receive-pack" with arguments: refname sha1-old sha1-new
+#
+# To enable this hook, rename this file to "update".
+#
+# Config
+# ------
+# hooks.allowunannotated
+#   This boolean sets whether unannotated tags will be allowed into the
+#   repository.  By default they won't be.
+# hooks.allowdeletetag
+#   This boolean sets whether deleting tags will be allowed in the
+#   repository.  By default they won't be.
+# hooks.allowmodifytag
+#   This boolean sets whether a tag may be modified after creation. By default
+#   it won't be.
+# hooks.allowdeletebranch
+#   This boolean sets whether deleting branches will be allowed in the
+#   repository.  By default they won't be.
+# hooks.denycreatebranch
+#   This boolean sets whether remotely creating branches will be denied
+#   in the repository.  By default this is allowed.
+#
+
+# --- Command line
+refname="$1"
+oldrev="$2"
+newrev="$3"
+
+# --- Safety check
+if [ -z "$GIT_DIR" ]; then
+	echo "Don't run this script from the command line." >&2
+	echo " (if you want, you could supply GIT_DIR then run" >&2
+	echo "  $0 <ref> <oldrev> <newrev>)" >&2
+	exit 1
+fi
+
+if [ -z "$refname" -o -z "$oldrev" -o -z "$newrev" ]; then
+	echo "usage: $0 <ref> <oldrev> <newrev>" >&2
+	exit 1
+fi
+
+# --- Config
+allowunannotated=$(git config --type=bool hooks.allowunannotated)
+allowdeletebranch=$(git config --type=bool hooks.allowdeletebranch)
+denycreatebranch=$(git config --type=bool hooks.denycreatebranch)
+allowdeletetag=$(git config --type=bool hooks.allowdeletetag)
+allowmodifytag=$(git config --type=bool hooks.allowmodifytag)
+
+# check for no description
+projectdesc=$(sed -e '1q' "$GIT_DIR/description")
+case "$projectdesc" in
+"Unnamed repository"* | "")
+	echo "*** Project description file hasn't been set" >&2
+	exit 1
+	;;
+esac
+
+# --- Check types
+# if $newrev is 0000...0000, it's a commit to delete a ref.
+zero=$(git hash-object --stdin </dev/null | tr '[0-9a-f]' '0')
+if [ "$newrev" = "$zero" ]; then
+	newrev_type=delete
+else
+	newrev_type=$(git cat-file -t $newrev)
+fi
+
+case "$refname","$newrev_type" in
+	refs/tags/*,commit)
+		# un-annotated tag
+		short_refname=${refname##refs/tags/}
+		if [ "$allowunannotated" != "true" ]; then
+			echo "*** The un-annotated tag, $short_refname, is not allowed in this repository" >&2
+			echo "*** Use 'git tag [ -a | -s ]' for tags you want to propagate." >&2
+			exit 1
+		fi
+		;;
+	refs/tags/*,delete)
+		# delete tag
+		if [ "$allowdeletetag" != "true" ]; then
+			echo "*** Deleting a tag is not allowed in this repository" >&2
+			exit 1
+		fi
+		;;
+	refs/tags/*,tag)
+		# annotated tag
+		if [ "$allowmodifytag" != "true" ] && git rev-parse $refname > /dev/null 2>&1
+		then
+			echo "*** Tag '$refname' already exists." >&2
+			echo "*** Modifying a tag is not allowed in this repository." >&2
+			exit 1
+		fi
+		;;
+	refs/heads/*,commit)
+		# branch
+		if [ "$oldrev" = "$zero" -a "$denycreatebranch" = "true" ]; then
+			echo "*** Creating a branch is not allowed in this repository" >&2
+			exit 1
+		fi
+		;;
+	refs/heads/*,delete)
+		# delete branch
+		if [ "$allowdeletebranch" != "true" ]; then
+			echo "*** Deleting a branch is not allowed in this repository" >&2
+			exit 1
+		fi
+		;;
+	refs/remotes/*,commit)
+		# tracking branch
+		;;
+	refs/remotes/*,delete)
+		# delete tracking branch
+		if [ "$allowdeletebranch" != "true" ]; then
+			echo "*** Deleting a tracking branch is not allowed in this repository" >&2
+			exit 1
+		fi
+		;;
+	*)
+		# Anything else (is there anything else?)
+		echo "*** Update hook: unknown type of update to ref $refname of type $newrev_type" >&2
+		exit 1
+		;;
+esac
+
+# --- Finished
+exit 0
+
+=== End/Start of File ===
+File: ./.git/info/exclude
+# git ls-files --others --exclude-from=.git/info/exclude
+# Lines that start with '#' are comments.
+# For a project mostly in C, the following would be a good set of
+# exclude patterns (uncomment them if you want to use them):
+# *.[oa]
+# *~
+
+=== End/Start of File ===
+File: ./.git/logs/HEAD
+0000000000000000000000000000000000000000 9ff3b98b844033b935143c221176c81244aae32e Jikku Jose <jikku@storybrain.com> 1714738024 +0530	clone: from github.com:vuejs/petite-vue.git
+9ff3b98b844033b935143c221176c81244aae32e 805b0b7341061a5cb38c018e5f0ace3b69485206 Jikku Jose <jikku@storybrain.com> 1715025420 +0530	commit: Fix examples
+805b0b7341061a5cb38c018e5f0ace3b69485206 805b0b7341061a5cb38c018e5f0ace3b69485206 Jikku Jose <jikku@storybrain.com> 1715261942 +0530	checkout: moving from main to pure-source
+805b0b7341061a5cb38c018e5f0ace3b69485206 8cff9f24a2f2c7e7ee0896a7029e90aad3d4069e Jikku Jose <jikku@storybrain.com> 1715262017 +0530	commit: Purge everything else
+8cff9f24a2f2c7e7ee0896a7029e90aad3d4069e 805b0b7341061a5cb38c018e5f0ace3b69485206 Jikku Jose <jikku@storybrain.com> 1715264351 +0530	checkout: moving from pure-source to main
+805b0b7341061a5cb38c018e5f0ace3b69485206 9ef72c583d57355c1069afa9d5a8076e375049c4 Jikku Jose <jikku@storybrain.com> 1715309328 +0530	commit: Update tests to use remote modules
+9ef72c583d57355c1069afa9d5a8076e375049c4 9ef72c583d57355c1069afa9d5a8076e375049c4 Jikku Jose <jikku@storybrain.com> 1715318003 +0530	checkout: moving from main to thin
+
+=== End/Start of File ===
+File: ./.git/logs/refs/heads/main
+0000000000000000000000000000000000000000 9ff3b98b844033b935143c221176c81244aae32e Jikku Jose <jikku@storybrain.com> 1714738024 +0530	clone: from github.com:vuejs/petite-vue.git
+9ff3b98b844033b935143c221176c81244aae32e 805b0b7341061a5cb38c018e5f0ace3b69485206 Jikku Jose <jikku@storybrain.com> 1715025420 +0530	commit: Fix examples
+805b0b7341061a5cb38c018e5f0ace3b69485206 9ef72c583d57355c1069afa9d5a8076e375049c4 Jikku Jose <jikku@storybrain.com> 1715309328 +0530	commit: Update tests to use remote modules
+
+=== End/Start of File ===
+File: ./.git/logs/refs/heads/pure-source
+0000000000000000000000000000000000000000 805b0b7341061a5cb38c018e5f0ace3b69485206 Jikku Jose <jikku@storybrain.com> 1715261942 +0530	branch: Created from HEAD
+805b0b7341061a5cb38c018e5f0ace3b69485206 8cff9f24a2f2c7e7ee0896a7029e90aad3d4069e Jikku Jose <jikku@storybrain.com> 1715262017 +0530	commit: Purge everything else
+
+=== End/Start of File ===
+File: ./.git/logs/refs/heads/thin
+0000000000000000000000000000000000000000 9ef72c583d57355c1069afa9d5a8076e375049c4 Jikku Jose <jikku@storybrain.com> 1715318003 +0530	branch: Created from HEAD
+
+=== End/Start of File ===
+File: ./.git/logs/refs/remotes/origin/HEAD
+0000000000000000000000000000000000000000 9ff3b98b844033b935143c221176c81244aae32e Jikku Jose <jikku@storybrain.com> 1714738024 +0530	clone: from github.com:vuejs/petite-vue.git
+
+=== End/Start of File ===
+File: ./.git/packed-refs
+# pack-refs with: peeled fully-peeled sorted 
+9ff3b98b844033b935143c221176c81244aae32e refs/remotes/origin/main
+be1f86cd0492ef0714a29184fa62c7e1c0d5ef5b refs/tags/v0.3.0
+f1c3cf1d20b7ad13862079227da8606026da8882 refs/tags/v0.4.0
+37a17191bac8d4e9c5cc2de6caf53634c723ecc4 refs/tags/v0.4.1
+
+=== End/Start of File ===
+File: ./.git/refs/heads/main
+9ef72c583d57355c1069afa9d5a8076e375049c4
+
+=== End/Start of File ===
+File: ./.git/refs/heads/pure-source
+8cff9f24a2f2c7e7ee0896a7029e90aad3d4069e
+
+=== End/Start of File ===
+File: ./.git/refs/heads/thin
+9ef72c583d57355c1069afa9d5a8076e375049c4
+
+=== End/Start of File ===
+File: ./.git/refs/remotes/origin/HEAD
+ref: refs/remotes/origin/main
+
+=== End/Start of File ===
+File: ./.gitignore
+TODOs.md
+node_modules
+dist
+explorations
+=== End/Start of File ===
+File: ./CHANGELOG.md
+## [0.4.1](https://github.com/vuejs/petite-vue/compare/v0.4.0...v0.4.1) (2022-01-18)
+
+### Bug Fixes
+
+- custom delimiters in child contexts ([#90](https://github.com/vuejs/petite-vue/issues/90)) ([1bbd4d1](https://github.com/vuejs/petite-vue/commit/1bbd4d1c00c6c19f2ee6740e728fb274101fc6c9))
+
+# [0.4.0](https://github.com/vuejs/petite-vue/compare/v0.3.0...v0.4.0) (2021-12-10)
+
+### Breaking Changes
+
+- require vue: prefix for lifecycle hooks ([a981928](https://github.com/vuejs/petite-vue/commit/a9819283f8504a9c2d0cea4d9d122028eba2d10d))
+
+# [0.3.0](https://github.com/vuejs/petite-vue/compare/v0.2.3...v0.3.0) (2021-09-14)
+
+### Bug Fixes
+
+- fix parsing chained modifiers ([15f75e9](https://github.com/vuejs/petite-vue/commit/15f75e94db3ce1d3630d7ffc10e2db4748d94f3e))
+- fix v-cloak on toggle ([#71](https://github.com/vuejs/petite-vue/issues/71)) ([f41981b](https://github.com/vuejs/petite-vue/commit/f41981b32ae4832e58223f55c209fd112dfbede7))
+- v-for update on move ([#79](https://github.com/vuejs/petite-vue/issues/79)) ([9af4ea3](https://github.com/vuejs/petite-vue/commit/9af4ea35957053665e586556f7ffb90b9077db26))
+- **v-model:** ensure v-model listeners are attached before v-on ([06d3aa7](https://github.com/vuejs/petite-vue/commit/06d3aa79b066410fe4e270b1a9dad65cb8d3fb97)), closes [#65](https://github.com/vuejs/petite-vue/issues/65)
+
+### Features
+
+- bind methods to context ([#74](https://github.com/vuejs/petite-vue/issues/74)) ([167c49d](https://github.com/vuejs/petite-vue/commit/167c49d6940c6f35c6002093d8807ac0e835dcea))
+- custom delimiters ([eda903c](https://github.com/vuejs/petite-vue/commit/eda903c0a93fe048219b74b0a44064c87b553ad4))
+
+=== End/Start of File ===
+File: ./LICENSE
+The MIT License (MIT)
+
+Copyright (c) 2021-present, Yuxi (Evan) You
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+=== End/Start of File ===
+File: ./README.md
+# petite-vue
+
+`petite-vue` is an alternative distribution of [Vue](https://vuejs.org) optimized for [progressive enhancement](https://developer.mozilla.org/en-US/docs/Glossary/Progressive_Enhancement). It provides the same template syntax and reactivity mental model as standard Vue. However, it is specifically optimized for "sprinkling" a small amount of interactions on an existing HTML page rendered by a server framework. See more details on [how it differs from standard Vue](#comparison-with-standard-vue).
+
+- Only ~6kb
+- Vue-compatible template syntax
+- DOM-based, mutates in place
+- Driven by `@vue/reactivity`
+
+## Status
+
+- This is pretty new. There are probably bugs and there might still be API changes, so **use at your own risk.** Is it usable though? Very much. Check out the [examples](https://github.com/vuejs/petite-vue/tree/main/examples) to see what it's capable of.
+
+- The issue list is intentionally disabled because I have higher priority things to focus on for now and don't want to be distracted. If you found a bug, you'll have to either workaround it or submit a PR to fix it yourself. That said, feel free to use the discussions tab to help each other out.
+
+- Feature requests are unlikely to be accepted at this time - the scope of this project is intentionally kept to a bare minimum.
+
+## Usage
+
+`petite-vue` can be used without a build step. Simply load it from a CDN:
+
+```html
+<script src="https://unpkg.com/petite-vue" defer init></script>
+
+<!-- anywhere on the page -->
+<div v-scope="{ count: 0 }">
+  {{ count }}
+  <button @click="count++">inc</button>
+</div>
+```
+
+- Use `v-scope` to mark regions on the page that should be controlled by `petite-vue`.
+- The `defer` attribute makes the script execute after HTML content is parsed.
+- The `init` attribute tells `petite-vue` to automatically query and initialize all elements that have `v-scope` on the page.
+
+### Manual Init
+
+If you don't want the auto init, remove the `init` attribute and move the scripts to end of `<body>`:
+
+```html
+<script src="https://unpkg.com/petite-vue"></script>
+<script>
+  PetiteVue.createApp().mount()
+</script>
+```
+
+Or, use the ES module build:
+
+```html
+<script type="module">
+  import { createApp } from 'https://unpkg.com/petite-vue?module'
+  createApp().mount()
+</script>
+```
+
+### Production CDN URLs
+
+The short CDN URL is meant for prototyping. For production usage, use a fully resolved CDN URL to avoid resolving and redirect cost:
+
+- Global build: `https://unpkg.com/petite-vue@0.2.2/dist/petite-vue.iife.js`
+  - exposes `PetiteVue` global, supports auto init
+- ESM build: `https://unpkg.com/petite-vue@0.2.2/dist/petite-vue.es.js`
+  - Must be used with `<script type="module">`
+
+### Root Scope
+
+The `createApp` function accepts a data object that serves as the root scope for all expressions. This can be used to bootstrap simple, one-off apps:
+
+```html
+<script type="module">
+  import { createApp } from 'https://unpkg.com/petite-vue?module'
+
+  createApp({
+    // exposed to all expressions
+    count: 0,
+    // getters
+    get plusOne() {
+      return this.count + 1
+    },
+    // methods
+    increment() {
+      this.count++
+    }
+  }).mount()
+</script>
+
+<!-- v-scope value can be omitted -->
+<div v-scope>
+  <p>{{ count }}</p>
+  <p>{{ plusOne }}</p>
+  <button @click="increment">increment</button>
+</div>
+```
+
+Note `v-scope` doesn't need to have a value here and simply serves as a hint for `petite-vue` to process the element.
+
+### Explicit Mount Target
+
+You can specify a mount target (selector or element) to limit `petite-vue` to only that region of the page:
+
+```js
+createApp().mount('#only-this-div')
+```
+
+This also means you can have multiple `petite-vue` apps to control different regions on the same page:
+
+```js
+createApp({
+  // root scope for app one
+}).mount('#app1')
+
+createApp({
+  // root scope for app two
+}).mount('#app2')
+```
+
+### Lifecycle Events
+
+You can listen to the special `vue:mounted` and `vue:unmounted` lifecycle events for each element (the `vue:` prefix is required since v0.4.0):
+
+```html
+<div
+  v-if="show"
+  @vue:mounted="console.log('mounted on: ', $el)"
+  @vue:unmounted="console.log('unmounted: ', $el)"
+></div>
+```
+
+### `v-effect`
+
+Use `v-effect` to execute **reactive** inline statements:
+
+```html
+<div v-scope="{ count: 0 }">
+  <div v-effect="$el.textContent = count"></div>
+  <button @click="count++">++</button>
+</div>
+```
+
+The effect uses `count` which is a reactive data source, so it will re-run whenever `count` changes.
+
+Another example of replacing the `todo-focus` directive found in the original Vue TodoMVC example:
+
+```html
+<input v-effect="if (todo === editedTodo) $el.focus()" />
+```
+
+### Components
+
+The concept of "Components" are different in `petite-vue`, as it is much more bare-bones.
+
+First, reusable scope logic can be created with functions:
+
+```html
+<script type="module">
+  import { createApp } from 'https://unpkg.com/petite-vue?module'
+
+  function Counter(props) {
+    return {
+      count: props.initialCount,
+      inc() {
+        this.count++
+      },
+      mounted() {
+        console.log(`I'm mounted!`)
+      }
+    }
+  }
+
+  createApp({
+    Counter
+  }).mount()
+</script>
+
+<div v-scope="Counter({ initialCount: 1 })" @vue:mounted="mounted">
+  <p>{{ count }}</p>
+  <button @click="inc">increment</button>
+</div>
+
+<div v-scope="Counter({ initialCount: 2 })">
+  <p>{{ count }}</p>
+  <button @click="inc">increment</button>
+</div>
+```
+
+### Components with Template
+
+If you also want to reuse a piece of template, you can provide a special `$template` key on a scope object. The value can be the template string, or an ID selector to a `<template>` element:
+
+```html
+<script type="module">
+  import { createApp } from 'https://unpkg.com/petite-vue?module'
+
+  function Counter(props) {
+    return {
+      $template: '#counter-template',
+      count: props.initialCount,
+      inc() {
+        this.count++
+      }
+    }
+  }
+
+  createApp({
+    Counter
+  }).mount()
+</script>
+
+<template id="counter-template">
+  My count is {{ count }}
+  <button @click="inc">++</button>
+</template>
+
+<!-- reuse it -->
+<div v-scope="Counter({ initialCount: 1 })"></div>
+<div v-scope="Counter({ initialCount: 2 })"></div>
+```
+
+The `<template>` approach is recommended over inline strings because it is more efficient to clone from a native template element.
+
+### Global State Management
+
+You can use the `reactive` method (re-exported from `@vue/reactivity`) to create global state singletons:
+
+```html
+<script type="module">
+  import { createApp, reactive } from 'https://unpkg.com/petite-vue?module'
+
+  const store = reactive({
+    count: 0,
+    inc() {
+      this.count++
+    }
+  })
+
+  // manipulate it here
+  store.inc()
+
+  createApp({
+    // share it with app scopes
+    store
+  }).mount()
+</script>
+
+<div v-scope="{ localCount: 0 }">
+  <p>Global {{ store.count }}</p>
+  <button @click="store.inc">increment</button>
+
+  <p>Local {{ localCount }}</p>
+  <button @click="localCount++">increment</button>
+</div>
+```
+
+### Custom Directives
+
+Custom directives are also supported but with a different interface:
+
+```js
+const myDirective = (ctx) => {
+  // the element the directive is on
+  ctx.el
+  // the raw value expression
+  // e.g. v-my-dir="x" then this would be "x"
+  ctx.exp
+  // v-my-dir:foo -> "foo"
+  ctx.arg
+  // v-my-dir.mod -> { mod: true }
+  ctx.modifiers
+  // evaluate the expression and get its value
+  ctx.get()
+  // evaluate arbitrary expression in current scope
+  ctx.get(`${ctx.exp} + 10`)
+
+  // run reactive effect
+  ctx.effect(() => {
+    // this will re-run every time the get() value changes
+    console.log(ctx.get())
+  })
+
+  return () => {
+    // cleanup if the element is unmounted
+  }
+}
+
+// register the directive
+createApp().directive('my-dir', myDirective).mount()
+```
+
+This is how `v-html` is implemented:
+
+```js
+const html = ({ el, get, effect }) => {
+  effect(() => {
+    el.innerHTML = get()
+  })
+}
+```
+
+### Custom Delimiters (0.3+)
+
+You can use custom delimiters by passing `$delimiters` to your root scope. This is useful when working alongside a server-side templating language that also uses mustaches:
+
+```js
+createApp({
+  $delimiters: ['${', '}']
+}).mount()
+```
+
+## Examples
+
+Check out the [examples directory](https://github.com/vuejs/petite-vue/tree/main/examples).
+
+## Features
+
+### `petite-vue` only
+
+- `v-scope`
+- `v-effect`
+- `@vue:mounted` & `@vue:unmounted` events
+
+### Has Different Behavior
+
+- In expressions, `$el` points to the current element the directive is bound to (instead of component root element)
+- `createApp()` accepts global state instead of a component
+- Components are simplified into object-returning functions
+- Custom directives have a different interface
+
+### Vue Compatible
+
+- `{{ }}` text bindings (configurable with custom delimiters)
+- `v-bind` (including `:` shorthand and class/style special handling)
+- `v-on` (including `@` shorthand and all modifiers)
+- `v-model` (all input types + non-string `:value` bindings)
+- `v-if` / `v-else` / `v-else-if`
+- `v-for`
+- `v-show`
+- `v-html`
+- `v-text`
+- `v-pre`
+- `v-once`
+- `v-cloak`
+- `reactive()`
+- `nextTick()`
+- Template refs
+
+### Not Supported
+
+Some features are dropped because they have a relatively low utility/size ratio in the context of progressive enhancement. If you need these features, you should probably just use standard Vue.
+
+- `ref()`, `computed()` etc.
+- Render functions (`petite-vue` has no virtual DOM)
+- Reactivity for Collection Types (Map, Set, etc., removed for smaller size)
+- Transition, KeepAlive, Teleport, Suspense
+- `v-for` deep destructure
+- `v-on="object"`
+- `v-is` & `<component :is="xxx">`
+- `v-bind:style` auto-prefixing
+
+## Comparison with standard Vue
+
+The point of `petite-vue` is not just about being small. It's about using the optimal implementation for the intended use case (progressive enhancement).
+
+Standard Vue can be used with or without a build step. When using a build setup (e.g. with Single-File Components), we pre-compile all the templates so there's no template processing to be done at runtime. And thanks to tree-shaking, we can ship optional features in standard Vue that doesn't bloat your bundle size when not used. This is the optimal usage of standard Vue, but since it involves a build setup, it is better suited when building SPAs or apps with relatively heavy interactions.
+
+When using standard Vue without a build step and mounting to in-DOM templates, it is much less optimal because:
+
+- We have to ship the Vue template compiler to the browser (13kb extra size)
+- The compiler will have to retrieve the template string from already instantiated DOM
+- The compiler then compiles the string into a JavaScript render function
+- Vue then replaces existing DOM templates with new DOM generated from the render function.
+
+`petite-vue` avoids all this overhead by walking the existing DOM and attaching fine-grained reactive effects to the elements directly. The DOM _is_ the template. This means `petite-vue` is much more efficient in progressive enhancement scenarios.
+
+This is also how Vue 1 worked. The trade-off here is that this approach is coupled to the DOM and thus not suitable for platform agnostic rendering or JavaScript SSR. We also lose the ability to work with render functions for advanced abstractions. However as you can probably tell, these capabilities are rarely needed in the context of progressive enhancement.
+
+## Comparison with Alpine
+
+`petite-vue` is indeed addressing a similar scope to [Alpine](https://alpinejs.dev), but aims to be (1) even more minimal and (2) more Vue-compatible.
+
+- `petite-vue` is around half the size of Alpine.
+
+- `petite-vue` has no transition system (maybe this can be an opt-in plugin).
+
+- Although Alpine largely resembles Vue's design, there are various cases where the behavior is different from Vue itself. It may also diverge more from Vue in the future. This is good because Alpine shouldn't have to restrict its design to strictly follow Vue - it should have the freedom to develop in a direction that makes sense for its goals.
+
+  In comparison, `petite-vue` will try to align with standard Vue behavior whenever possible so that there is less friction moving to standard Vue if needed. It's intended to be **part of the Vue ecosystem** to cover the progressive enhancement use case where standard Vue is less optimized for nowadays.
+
+## Security and CSP
+
+`petite-vue` evaluates JavaScript expressions in the templates. This means **if** `petite-vue` is mounted on a region of the DOM that contains non-sanitized HTML from user data, it may lead to XSS attacks. **If your page renders user-submitted HTML, you should prefer initializing `petite-vue` using [explicit mount target](#explicit-mount-target) so that it only processes parts that are controlled by you**. You can also sanitize any user-submitted HTML for the `v-scope` attribute.
+
+`petite-vue` evaluates the expressions using `new Function()`, which may be prohibited in strict CSP settings. There is no plan to provide a CSP build because it involves shipping an expression parser which defeats the purpose of being lightweight. If you have strict CSP requirements, you should probably use standard Vue and pre-compile the templates.
+
+## License
+
+MIT
+
+=== End/Start of File ===
+File: ./examples/commits.html
+<script type="module">
+  import { createApp } from "https://unpkg.com/petite-vue?module"
+
+  const API_URL = `https://api.github.com/repos/vuejs/vue-next/commits?per_page=3&sha=`
+
+  createApp({
+    branches: ["master", "v2-compat"],
+    currentBranch: "master",
+    commits: null,
+
+    truncate(v) {
+      const newline = v.indexOf("\n")
+      return newline > 0 ? v.slice(0, newline) : v
+    },
+
+    formatDate(v) {
+      return v.replace(/T|Z/g, " ")
+    },
+
+    fetchData() {
+      fetch(`${API_URL}${this.currentBranch}`)
+        .then(res => res.json())
+        .then(data => {
+          this.commits = data
+        })
+    },
+  }).mount()
+</script>
+
+<div v-scope v-effect="fetchData()">
+  <h1>Latest Vue.js Commits</h1>
+  <template v-for="branch in branches">
+    <input
+      type="radio"
+      :id="branch"
+      :value="branch"
+      name="branch"
+      v-model="currentBranch"
+    />
+    <label :for="branch">{{ branch }}</label>
+  </template>
+  <p>vuejs/vue@{{ currentBranch }}</p>
+  <ul>
+    <li v-for="{ html_url, sha, author, commit } in commits">
+      <a :href="html_url" target="_blank" class="commit"
+        >{{ sha.slice(0, 7) }}</a
+      >
+      - <span class="message">{{ truncate(commit.message) }}</span><br />
+      by
+      <span class="author"
+        ><a :href="author.html_url" target="_blank"
+          >{{ commit.author.name }}</a
+        ></span
+      >
+      at <span class="date">{{ formatDate(commit.author.date) }}</span>
+    </li>
+  </ul>
+</div>
+
+<style>
+  body {
+    font-family: "Helvetica", Arial, sans-serif;
+  }
+  a {
+    text-decoration: none;
+    color: #f66;
+  }
+  li {
+    line-height: 1.5em;
+    margin-bottom: 20px;
+  }
+  .author,
+  .date {
+    font-weight: bold;
+  }
+</style>
+
+=== End/Start of File ===
+File: ./examples/grid.html
+<script type="module">
+  import { createApp } from "https://unpkg.com/petite-vue?module"
+
+  const columns = ["name", "power"]
+  const data = [
+    { name: "Chuck Norris", power: Infinity },
+    { name: "Bruce Lee", power: 9000 },
+    { name: "Jackie Chan", power: 7000 },
+    { name: "Jet Li", power: 8000 },
+  ]
+
+  createApp({
+    query: "",
+    columns,
+    data,
+    sortKey: "",
+    sortOrders: columns.reduce((o, key) => ((o[key] = 1), o), {}),
+
+    get filteredData() {
+      const sortKey = this.sortKey
+      const filterKey = this.query && this.query.toLowerCase()
+      const order = this.sortOrders[sortKey] || 1
+      let data = this.data
+      if (filterKey) {
+        data = data.filter(row => {
+          return Object.keys(row).some(key => {
+            return String(row[key]).toLowerCase().indexOf(filterKey) > -1
+          })
+        })
+      }
+      if (sortKey) {
+        data = data.slice().sort((a, b) => {
+          a = a[sortKey]
+          b = b[sortKey]
+          return (a === b ? 0 : a > b ? 1 : -1) * order
+        })
+      }
+      return data
+    },
+
+    sortBy(key) {
+      this.sortKey = key
+      this.sortOrders[key] = this.sortOrders[key] * -1
+    },
+
+    capitalize(str) {
+      return str.charAt(0).toUpperCase() + str.slice(1)
+    },
+  }).mount()
+</script>
+
+<div v-scope>
+  <form id="search">Search <input name="query" v-model="query" /></form>
+  <table v-if="filteredData.length">
+    <thead>
+      <tr>
+        <th
+          v-for="key in columns"
+          @click="sortBy(key)"
+          :class="{ active: sortKey == key }"
+        >
+          {{ capitalize(key) }}
+          <span class="arrow" :class="sortOrders[key] > 0 ? 'asc' : 'dsc'">
+          </span>
+        </th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr v-for="entry in filteredData">
+        <td v-for="key in columns">{{entry[key]}}</td>
+      </tr>
+    </tbody>
+  </table>
+  <p v-else>No matches found.</p>
+</div>
+
+<style>
+  body {
+    font-family:
+      Helvetica Neue,
+      Arial,
+      sans-serif;
+    font-size: 14px;
+    color: #444;
+  }
+
+  table {
+    border: 2px solid #42b983;
+    border-radius: 3px;
+    background-color: #fff;
+  }
+
+  th {
+    background-color: #42b983;
+    color: rgba(255, 255, 255, 0.66);
+    cursor: pointer;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+  }
+
+  td {
+    background-color: #f9f9f9;
+  }
+
+  th,
+  td {
+    min-width: 120px;
+    padding: 10px 20px;
+  }
+
+  th.active {
+    color: #fff;
+  }
+
+  th.active .arrow {
+    opacity: 1;
+  }
+
+  .arrow {
+    display: inline-block;
+    vertical-align: middle;
+    width: 0;
+    height: 0;
+    margin-left: 5px;
+    opacity: 0.66;
+  }
+
+  .arrow.asc {
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-bottom: 4px solid #fff;
+  }
+
+  .arrow.dsc {
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+    border-top: 4px solid #fff;
+  }
+</style>
+
+=== End/Start of File ===
+File: ./examples/markdown.html
+<script src="https://unpkg.com/marked@2.1.3/lib/marked.js"></script>
+<script src="https://unpkg.com/lodash@4.17.21/lodash.min.js"></script>
+<link rel="stylesheet" href="./assets/github-markdown-dark.css" />
+<script type="module">
+  import { createApp } from "https://unpkg.com/petite-vue?module"
+
+  createApp({
+    input: "# hello",
+    get compiledMarkdown() {
+      return marked(this.input)
+    },
+    update: _.debounce(function (e) {
+      this.input = e.target.value
+    }, 100),
+  }).mount("#editor")
+</script>
+
+<div id="editor">
+  <textarea class="input" :value="input" @input="update"></textarea>
+  <div class="output markdown-body" v-html="compiledMarkdown"></div>
+</div>
+
+<style>
+  html,
+  body,
+  #editor {
+    margin: 0;
+    height: 100%;
+    font-family: "Helvetica Neue", Arial, sans-serif;
+    color: #333;
+  }
+
+  #editor {
+    display: flex;
+  }
+
+  .input,
+  .output {
+    width: 50%;
+    box-sizing: border-box;
+  }
+
+  .input {
+    border: none;
+    border-right: 1px solid #ccc;
+    resize: none;
+    outline: none;
+    background-color: #f6f6f6;
+    font-size: 14px;
+    font-family: "Monaco", courier, monospace;
+    padding: 20px;
+  }
+
+  .output {
+    padding: 0 20px;
+  }
+
+  code {
+    color: #f66;
+  }
+</style>
+
+=== End/Start of File ===
+File: ./examples/svg.html
+<script type="module">
+  import { createApp } from "https://unpkg.com/petite-vue?module"
+
+  function valueToPoint(value, index, total) {
+    var x = 0
+    var y = -value * 0.8
+    var angle = ((Math.PI * 2) / total) * index
+    var cos = Math.cos(angle)
+    var sin = Math.sin(angle)
+    var tx = x * cos - y * sin + 100
+    var ty = x * sin + y * cos + 100
+
+    if (ty < 0) debugger
+    return {
+      x: tx,
+      y: ty,
+    }
+  }
+
+  createApp({
+    newLabel: "",
+    stats: [
+      { label: "A", value: 100 },
+      { label: "B", value: 100 },
+      { label: "C", value: 100 },
+      { label: "D", value: 100 },
+      { label: "E", value: 100 },
+      { label: "F", value: 100 },
+    ],
+
+    get pointsString() {
+      return this.getPoints()
+        .map(({ x, y }) => `${x},${y}`)
+        .join(" ")
+    },
+
+    getPoints(offset = 0) {
+      const total = this.stats.length
+      return this.stats.map((stat, i) => ({
+        ...valueToPoint(+stat.value + offset, i, total),
+        label: stat.label,
+      }))
+    },
+
+    add(e) {
+      e.preventDefault()
+      if (!this.newLabel) return
+      this.stats.push({
+        label: this.newLabel,
+        value: 100,
+      })
+      this.newLabel = ""
+    },
+
+    remove(stat) {
+      if (this.stats.length > 3) {
+        this.stats.splice(this.stats.indexOf(stat), 1)
+      } else {
+        alert("Can't delete more!")
+      }
+    },
+  }).mount()
+</script>
+
+<div v-scope>
+  <svg width="200" height="200">
+    <g>
+      <polygon :points="pointsString"></polygon>
+      <circle cx="100" cy="100" r="80"></circle>
+      <text v-for="{ x, y, label } in getPoints(10)" :x="x" :y="y">
+        {{ label }}
+      </text>
+    </g>
+  </svg>
+  <!-- controls -->
+  <div v-for="stat in stats">
+    <label>{{stat.label}}</label>
+    <input type="range" v-model="stat.value" min="0" max="100" />
+    <span>{{stat.value}}</span>
+    <button @click="remove(stat)" class="remove">X</button>
+  </div>
+  <form id="add">
+    <input name="newlabel" v-model="newLabel" />
+    <button @click="add">Add a Stat</button>
+  </form>
+  <pre id="raw">{{ stats }}</pre>
+</div>
+
+<style>
+  body {
+    font-family:
+      Helvetica Neue,
+      Arial,
+      sans-serif;
+  }
+
+  polygon {
+    fill: #42b983;
+    opacity: 0.75;
+  }
+
+  circle {
+    fill: transparent;
+    stroke: #999;
+  }
+
+  text {
+    font-family:
+      Helvetica Neue,
+      Arial,
+      sans-serif;
+    font-size: 10px;
+    fill: #666;
+  }
+
+  label {
+    display: inline-block;
+    margin-left: 10px;
+    width: 20px;
+  }
+
+  #raw {
+    position: absolute;
+    top: 0;
+    left: 300px;
+  }
+</style>
+
+=== End/Start of File ===
+File: ./examples/todomvc.html
+<link
+  rel="stylesheet"
+  href="https://unpkg.com/todomvc-app-css@2.4.1/index.css"
+/>
+<style>
+  [v-cloak] {
+    display: none;
+  }
+</style>
+
+<script type="module">
+  import { createApp } from "https://unpkg.com/petite-vue?module"
+
+  const STORAGE_KEY = "todos-petite-vue"
+  const todoStorage = {
+    fetch() {
+      const todos = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]")
+      todos.forEach((todo, index) => {
+        todo.id = index
+      })
+      todoStorage.uid = todos.length
+      return todos
+    },
+    save(todos) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(todos))
+    },
+  }
+
+  const filters = {
+    all(todos) {
+      return todos
+    },
+    active(todos) {
+      return todos.filter(todo => {
+        return !todo.completed
+      })
+    },
+    completed(todos) {
+      return todos.filter(function (todo) {
+        return todo.completed
+      })
+    },
+  }
+
+  createApp({
+    todos: todoStorage.fetch(),
+    newTodo: "",
+    editedTodo: null,
+    visibility: "all",
+
+    get filteredTodos() {
+      return filters[this.visibility](this.todos)
+    },
+
+    get remaining() {
+      return filters.active(this.todos).length
+    },
+
+    get allDone() {
+      return this.remaining === 0
+    },
+
+    set allDone(value) {
+      this.todos.forEach(function (todo) {
+        todo.completed = value
+      })
+    },
+
+    save() {
+      todoStorage.save(this.todos)
+    },
+
+    setupRouting() {
+      const onHashChange = () => {
+        var visibility = window.location.hash.replace(/#\/?/, "")
+        if (filters[visibility]) {
+          this.visibility = visibility
+        } else {
+          window.location.hash = ""
+          this.visibility = "all"
+        }
+      }
+      window.addEventListener("hashchange", onHashChange)
+      onHashChange()
+    },
+
+    addTodo() {
+      var value = this.newTodo && this.newTodo.trim()
+      if (!value) {
+        return
+      }
+      this.todos.push({
+        id: todoStorage.uid++,
+        title: value,
+        completed: false,
+      })
+      this.newTodo = ""
+    },
+
+    removeTodo(todo) {
+      this.todos.splice(this.todos.indexOf(todo), 1)
+    },
+
+    editTodo(todo) {
+      this.beforeEditCache = todo.title
+      this.editedTodo = todo
+    },
+
+    doneEdit(todo) {
+      if (!this.editedTodo) {
+        return
+      }
+      this.editedTodo = null
+      todo.title = todo.title.trim()
+      if (!todo.title) {
+        this.removeTodo(todo)
+      }
+    },
+
+    cancelEdit(todo) {
+      this.editedTodo = null
+      todo.title = this.beforeEditCache
+    },
+
+    removeCompleted() {
+      this.todos = filters.active(this.todos)
+    },
+
+    pluralize(n) {
+      return n === 1 ? "item" : "items"
+    },
+  }).mount("#app")
+</script>
+
+<div id="app" @mounted="setupRouting" v-effect="save()" v-cloak>
+  <section class="todoapp">
+    <header class="header">
+      <h1>todos</h1>
+      <input
+        class="new-todo"
+        autofocus
+        autocomplete="off"
+        placeholder="What needs to be done?"
+        v-model="newTodo"
+        @keyup.enter="addTodo"
+      />
+    </header>
+    <section class="main" v-show="todos.length">
+      <input
+        id="toggle-all"
+        class="toggle-all"
+        type="checkbox"
+        v-model="allDone"
+      />
+      <label for="toggle-all">Mark all as complete</label>
+      <ul class="todo-list">
+        <li
+          v-for="todo in filteredTodos"
+          class="todo"
+          :key="todo.id"
+          :class="{ completed: todo.completed, editing: todo === editedTodo }"
+        >
+          <div class="view">
+            <input class="toggle" type="checkbox" v-model="todo.completed" />
+            <label @dblclick="editTodo(todo)">{{ todo.title }}</label>
+            <button class="destroy" @click="removeTodo(todo)"></button>
+          </div>
+          <input
+            class="edit"
+            type="text"
+            v-model="todo.title"
+            v-effect="if (todo === editedTodo) $el.focus()"
+            @blur="doneEdit(todo)"
+            @keyup.enter="doneEdit(todo)"
+            @keyup.escape="cancelEdit(todo)"
+          />
+        </li>
+      </ul>
+    </section>
+    <footer class="footer" v-show="todos.length">
+      <span class="todo-count">
+        <strong>{{ remaining }}</strong>
+        <span>{{ pluralize(remaining) }} left</span>
+      </span>
+      <ul class="filters">
+        <li>
+          <a href="#/all" :class="{ selected: visibility === 'all' }">All</a>
+        </li>
+        <li>
+          <a href="#/active" :class="{ selected: visibility === 'active' }"
+            >Active</a
+          >
+        </li>
+        <li>
+          <a
+            href="#/completed"
+            :class="{ selected: visibility === 'completed' }"
+            >Completed</a
+          >
+        </li>
+      </ul>
+      <button
+        class="clear-completed"
+        @click="removeCompleted"
+        v-show="todos.length > remaining"
+      >
+        Clear completed
+      </button>
+    </footer>
+  </section>
+</div>
+
+=== End/Start of File ===
+File: ./examples/tree.html
+<script type="module">
+  import { createApp } from "https://unpkg.com/petite-vue?module"
+
+  const treeData = {
+    name: "My Tree",
+    children: [
+      { name: "hello" },
+      { name: "wat" },
+      {
+        name: "child folder",
+        children: [
+          {
+            name: "child folder",
+            children: [{ name: "hello" }, { name: "wat" }],
+          },
+          { name: "hello" },
+          { name: "wat" },
+          {
+            name: "child folder",
+            children: [{ name: "hello" }, { name: "wat" }],
+          },
+        ],
+      },
+    ],
+  }
+
+  function TreeItem(model) {
+    return {
+      $template: "#item-template",
+      model,
+      open: false,
+      get isFolder() {
+        return model.children && model.children.length
+      },
+      toggle() {
+        if (this.isFolder) {
+          this.open = !this.open
+        }
+      },
+      changeType() {
+        if (!this.isFolder) {
+          model.children = []
+          this.addChild()
+          this.open = true
+        }
+      },
+      addChild() {
+        model.children.push({
+          name: "new stuff",
+        })
+      },
+    }
+  }
+
+  createApp({
+    TreeItem,
+    treeData,
+  }).mount()
+</script>
+
+<template id="item-template">
+  <div :class="{ bold: isFolder }" @click="toggle" @dblclick="changeType">
+    <span>{{ model.name }}</span>
+    <span v-if="isFolder">[{{open ? '-' : '+'}}]</span>
+  </div>
+  <ul v-show="open" v-if="isFolder">
+    <li v-for="model in model.children" v-scope="TreeItem(model)"></li>
+    <li class="add" @click="addChild">+</li>
+  </ul>
+</template>
+
+<p>Double click an item to turn it into a folder.</p>
+<ul v-scope>
+  <li class="item" v-scope="TreeItem(treeData)"></li>
+</ul>
+
+<style>
+  body {
+    font-family: Menlo, Consolas, monospace;
+    color: #444;
+  }
+  .item {
+    cursor: pointer;
+  }
+  .bold {
+    font-weight: bold;
+  }
+</style>
+
+=== End/Start of File ===
+File: ./index.html
+<h2>Examples</h2>
+<ul>
+  <li><a href="/examples/todomvc.html">TodoMVC</a></li>
+  <li><a href="/examples/commits.html">Commits</a></li>
+  <li><a href="/examples/grid.html">Grid</a></li>
+  <li><a href="/examples/markdown.html">Markdown</a></li>
+  <li><a href="/examples/svg.html">SVG</a></li>
+  <li><a href="/examples/tree.html">Tree</a></li>
+</ul>
+
+<h2>Tests</h2>
+<ul>
+  <li><a href="/tests/scope.html">v-scope</a></li>
+  <li><a href="/tests/effect.html">v-effect</a></li>
+  <li><a href="/tests/bind.html">v-bind</a></li>
+  <li><a href="/tests/on.html">v-on</a></li>
+  <li><a href="/tests/if.html">v-if</a></li>
+  <li><a href="/tests/show.html">v-show</a></li>
+  <li><a href="/tests/for.html">v-for</a></li>
+  <li><a href="/tests/model.html">v-model</a></li>
+  <li><a href="/tests/once.html">v-once</a></li>
+  <li><a href="/tests/html.html">v-html</a></li>
+  <li><a href="/tests/text.html">v-text</a></li>
+  <li><a href="/tests/pre.html">v-pre</a></li>
+  <li><a href="/tests/cloak.html">v-cloak</a></li>
+  <li><a href="/tests/reactive.html">reactive</a></li>
+  <li><a href="/tests/multi-mount.html">Multi mount</a></li>
+  <li><a href="/tests/custom-delimiters.html">Custom delimiters</a></li>
+</ul>
+
+<style>
+  a {
+    font-size: 18px;
+  }
+</style>
+=== End/Start of File ===
+File: ./package.json
+{
+  "name": "petite-vue",
+  "version": "0.4.1",
+  "description": "5kb subset of Vue optimized for progressive enhancement",
+  "files": [
+    "dist"
+  ],
+  "main": "dist/petite-vue.umd.js",
+  "unpkg": "dist/petite-vue.iife.js",
+  "jsdelivr": "dist/petite-vue.iife.js",
+  "module": "./dist/petite-vue.es.js",
+  "exports": {
+    ".": {
+      "import": "./dist/petite-vue.es.js",
+      "require": "./dist/petite-vue.umd.js"
+    }
+  },
+  "types": "./dist/types/index.d.ts",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && tsc --emitDeclarationOnly && mv dist/src dist/types",
+    "changelog": "conventional-changelog -p angular -i CHANGELOG.md -s",
+    "release": "node scripts/release.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vuejs/petite-vue.git"
+  },
+  "keywords": [
+    "vue"
+  ],
+  "author": "Evan You",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/vuejs/petite-vue/discussions"
+  },
+  "homepage": "https://github.com/vuejs/petite-vue#readme",
+  "devDependencies": {
+    "@vue/reactivity": "^3.2.27",
+    "@vue/shared": "^3.2.27",
+    "chalk": "^4.1.1",
+    "conventional-changelog-cli": "^2.1.1",
+    "enquirer": "^2.3.6",
+    "execa": "^5.0.0",
+    "prettier": "^2.3.0",
+    "semver": "^7.3.5",
+    "typescript": "^4.4.3",
+    "vite": "^2.7.12"
+  }
+}
+
+=== End/Start of File ===
+File: ./scripts/release.js
+const fs = require('fs')
+const path = require('path')
+const chalk = require('chalk')
+const semver = require('semver')
+const { prompt } = require('enquirer')
+const execa = require('execa')
+const currentVersion = require('../package.json').version
+
+const versionIncrements = ['patch', 'minor', 'major']
+
+const inc = (i) => semver.inc(currentVersion, i)
+const run = (bin, args, opts = {}) =>
+  execa(bin, args, { stdio: 'inherit', ...opts })
+const step = (msg) => console.log(chalk.cyan(msg))
+
+async function main() {
+  let targetVersion
+
+  const { release } = await prompt({
+    type: 'select',
+    name: 'release',
+    message: 'Select release type',
+    choices: versionIncrements.map((i) => `${i} (${inc(i)})`).concat(['custom'])
+  })
+
+  if (release === 'custom') {
+    targetVersion = (
+      await prompt({
+        type: 'input',
+        name: 'version',
+        message: 'Input custom version',
+        initial: currentVersion
+      })
+    ).version
+  } else {
+    targetVersion = release.match(/\((.*)\)/)[1]
+  }
+
+  if (!semver.valid(targetVersion)) {
+    throw new Error(`Invalid target version: ${targetVersion}`)
+  }
+
+  const { yes: tagOk } = await prompt({
+    type: 'confirm',
+    name: 'yes',
+    message: `Releasing v${targetVersion}. Confirm?`
+  })
+
+  if (!tagOk) {
+    return
+  }
+
+  // Update the package version.
+  step('\nUpdating the package version...')
+  updatePackage(targetVersion)
+
+  // Build the package.
+  step('\nBuilding the package...')
+  await run('yarn', ['build'])
+
+  // Generate the changelog.
+  step('\nGenerating the changelog...')
+  await run('yarn', ['changelog'])
+  await run('yarn', ['prettier', '--write', 'CHANGELOG.md'])
+
+  const { yes: changelogOk } = await prompt({
+    type: 'confirm',
+    name: 'yes',
+    message: `Changelog generated. Does it look good?`
+  })
+
+  if (!changelogOk) {
+    return
+  }
+
+  // Commit changes to the Git and create a tag.
+  step('\nCommitting changes...')
+  await run('git', ['add', 'CHANGELOG.md', 'package.json'])
+  await run('git', ['commit', '-m', `release: v${targetVersion}`])
+  await run('git', ['tag', `v${targetVersion}`])
+
+  // Publish the package.
+  step('\nPublishing the package...')
+  await run('yarn', [
+    'publish',
+    '--new-version',
+    targetVersion,
+    '--no-commit-hooks',
+    '--no-git-tag-version'
+  ])
+
+  // Push to GitHub.
+  step('\nPushing to GitHub...')
+  await run('git', ['push', 'origin', `refs/tags/v${targetVersion}`])
+  await run('git', ['push'])
+}
+
+function updatePackage(version) {
+  const pkgPath = path.resolve(path.resolve(__dirname, '..'), 'package.json')
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'))
+
+  pkg.version = version
+
+  fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
+}
+
+main().catch((err) => console.error(err))
+
+=== End/Start of File ===
+File: ./src/app.ts
+import { reactive } from '@vue/reactivity'
+import { Block } from './block'
+import { Directive } from './directives'
+import { bindContextMethods, createContext } from './context'
+import { toDisplayString } from './directives/text'
+import { nextTick } from './scheduler'
+
+const escapeRegex = (str: string) =>
+  str.replace(/[-.*+?^${}()|[\]\/\\]/g, '\\$&')
+
+export const createApp = (initialData?: any) => {
+  // root context
+  const ctx = createContext()
+  if (initialData) {
+    ctx.scope = reactive(initialData)
+    bindContextMethods(ctx.scope)
+
+    // handle custom delimiters
+    if (initialData.$delimiters) {
+      const [open, close] = (ctx.delimiters = initialData.$delimiters)
+      ctx.delimitersRE = new RegExp(
+        escapeRegex(open) + '([^]+?)' + escapeRegex(close),
+        'g'
+      )
+    }
+  }
+
+  // global internal helpers
+  ctx.scope.$s = toDisplayString
+  ctx.scope.$nextTick = nextTick
+  ctx.scope.$refs = Object.create(null)
+
+  let rootBlocks: Block[]
+
+  return {
+    directive(name: string, def?: Directive) {
+      if (def) {
+        ctx.dirs[name] = def
+        return this
+      } else {
+        return ctx.dirs[name]
+      }
+    },
+
+    mount(el?: string | Element | null) {
+      if (typeof el === 'string') {
+        el = document.querySelector(el)
+        if (!el) {
+          import.meta.env.DEV &&
+            console.error(`selector ${el} has no matching element.`)
+          return
+        }
+      }
+
+      el = el || document.documentElement
+      let roots: Element[]
+      if (el.hasAttribute('v-scope')) {
+        roots = [el]
+      } else {
+        roots = [...el.querySelectorAll(`[v-scope]`)].filter(
+          (root) => !root.matches(`[v-scope] [v-scope]`)
+        )
+      }
+      if (!roots.length) {
+        roots = [el]
+      }
+
+      if (
+        import.meta.env.DEV &&
+        roots.length === 1 &&
+        roots[0] === document.documentElement
+      ) {
+        console.warn(
+          `Mounting on documentElement - this is non-optimal as petite-vue ` +
+            `will be forced to crawl the entire page's DOM. ` +
+            `Consider explicitly marking elements controlled by petite-vue ` +
+            `with \`v-scope\`.`
+        )
+      }
+
+      rootBlocks = roots.map((el) => new Block(el, ctx, true))
+      return this
+    },
+
+    unmount() {
+      rootBlocks.forEach((block) => block.teardown())
+    }
+  }
+}
+
+=== End/Start of File ===
+File: ./src/block.ts
+import { Context, createContext } from './context'
+import { walk } from './walk'
+import { remove } from '@vue/shared'
+import { stop } from '@vue/reactivity'
+
+export class Block {
+  template: Element | DocumentFragment
+  ctx: Context
+  key?: any
+  parentCtx?: Context
+
+  isFragment: boolean
+  start?: Text
+  end?: Text
+
+  get el() {
+    return this.start || (this.template as Element)
+  }
+
+  constructor(template: Element, parentCtx: Context, isRoot = false) {
+    this.isFragment = template instanceof HTMLTemplateElement
+
+    if (isRoot) {
+      this.template = template
+    } else if (this.isFragment) {
+      this.template = (template as HTMLTemplateElement).content.cloneNode(
+        true
+      ) as DocumentFragment
+    } else {
+      this.template = template.cloneNode(true) as Element
+    }
+
+    if (isRoot) {
+      this.ctx = parentCtx
+    } else {
+      // create child context
+      this.parentCtx = parentCtx
+      parentCtx.blocks.push(this)
+      this.ctx = createContext(parentCtx)
+    }
+
+    walk(this.template, this.ctx)
+  }
+
+  insert(parent: Element, anchor: Node | null = null) {
+    if (this.isFragment) {
+      if (this.start) {
+        // already inserted, moving
+        let node: Node | null = this.start
+        let next: Node | null
+        while (node) {
+          next = node.nextSibling
+          parent.insertBefore(node, anchor)
+          if (node === this.end) break
+          node = next
+        }
+      } else {
+        this.start = new Text('')
+        this.end = new Text('')
+        parent.insertBefore(this.end, anchor)
+        parent.insertBefore(this.start, this.end)
+        parent.insertBefore(this.template, this.end)
+      }
+    } else {
+      parent.insertBefore(this.template, anchor)
+    }
+  }
+
+  remove() {
+    if (this.parentCtx) {
+      remove(this.parentCtx.blocks, this)
+    }
+    if (this.start) {
+      const parent = this.start.parentNode!
+      let node: Node | null = this.start
+      let next: Node | null
+      while (node) {
+        next = node.nextSibling
+        parent.removeChild(node)
+        if (node === this.end) break
+        node = next
+      }
+    } else {
+      this.template.parentNode!.removeChild(this.template)
+    }
+    this.teardown()
+  }
+
+  teardown() {
+    this.ctx.blocks.forEach((child) => {
+      child.teardown()
+    })
+    this.ctx.effects.forEach(stop)
+    this.ctx.cleanups.forEach((fn) => fn())
+  }
+}
+
+=== End/Start of File ===
+File: ./src/context.ts
+import {
+  effect as rawEffect,
+  reactive,
+  ReactiveEffectRunner
+} from '@vue/reactivity'
+import { Block } from './block'
+import { Directive } from './directives'
+import { queueJob } from './scheduler'
+import { inOnce } from './walk'
+export interface Context {
+  key?: any
+  scope: Record<string, any>
+  dirs: Record<string, Directive>
+  blocks: Block[]
+  effect: typeof rawEffect
+  effects: ReactiveEffectRunner[]
+  cleanups: (() => void)[]
+  delimiters: [string, string]
+  delimitersRE: RegExp
+}
+
+export const createContext = (parent?: Context): Context => {
+  const ctx: Context = {
+    delimiters: ['{{', '}}'],
+    delimitersRE: /\{\{([^]+?)\}\}/g,
+    ...parent,
+    scope: parent ? parent.scope : reactive({}),
+    dirs: parent ? parent.dirs : {},
+    effects: [],
+    blocks: [],
+    cleanups: [],
+    effect: (fn) => {
+      if (inOnce) {
+        queueJob(fn)
+        return fn as any
+      }
+      const e: ReactiveEffectRunner = rawEffect(fn, {
+        scheduler: () => queueJob(e)
+      })
+      ctx.effects.push(e)
+      return e
+    }
+  }
+  return ctx
+}
+
+export const createScopedContext = (ctx: Context, data = {}): Context => {
+  const parentScope = ctx.scope
+  const mergedScope = Object.create(parentScope)
+  Object.defineProperties(mergedScope, Object.getOwnPropertyDescriptors(data))
+  mergedScope.$refs = Object.create(parentScope.$refs)
+  const reactiveProxy = reactive(
+    new Proxy(mergedScope, {
+      set(target, key, val, receiver) {
+        // when setting a property that doesn't exist on current scope,
+        // do not create it on the current scope and fallback to parent scope.
+        if (receiver === reactiveProxy && !target.hasOwnProperty(key)) {
+          return Reflect.set(parentScope, key, val)
+        }
+        return Reflect.set(target, key, val, receiver)
+      }
+    })
+  )
+
+  bindContextMethods(reactiveProxy)
+  return {
+    ...ctx,
+    scope: reactiveProxy
+  }
+}
+
+export const bindContextMethods = (scope: Record<string, any>) => {
+  for (const key of Object.keys(scope)) {
+    if (typeof scope[key] === 'function') {
+      scope[key] = scope[key].bind(scope)
+    }
+  }
+}
+
+=== End/Start of File ===
+File: ./src/directives/bind.ts
+import { Directive } from '.'
+import {
+  normalizeClass,
+  normalizeStyle,
+  isString,
+  isArray,
+  hyphenate,
+  camelize
+} from '@vue/shared'
+
+const forceAttrRE = /^(spellcheck|draggable|form|list|type)$/
+
+export const bind: Directive<Element & { _class?: string }> = ({
+  el,
+  get,
+  effect,
+  arg,
+  modifiers
+}) => {
+  let prevValue: any
+
+  // record static class
+  if (arg === 'class') {
+    el._class = el.className
+  }
+
+  effect(() => {
+    let value = get()
+    if (arg) {
+      if (modifiers?.camel) {
+        arg = camelize(arg)
+      }
+      setProp(el, arg, value, prevValue)
+    } else {
+      for (const key in value) {
+        setProp(el, key, value[key], prevValue && prevValue[key])
+      }
+      for (const key in prevValue) {
+        if (!value || !(key in value)) {
+          setProp(el, key, null)
+        }
+      }
+    }
+    prevValue = value
+  })
+}
+
+const setProp = (
+  el: Element & { _class?: string },
+  key: string,
+  value: any,
+  prevValue?: any
+) => {
+  if (key === 'class') {
+    el.setAttribute(
+      'class',
+      normalizeClass(el._class ? [el._class, value] : value) || ''
+    )
+  } else if (key === 'style') {
+    value = normalizeStyle(value)
+    const { style } = el as HTMLElement
+    if (!value) {
+      el.removeAttribute('style')
+    } else if (isString(value)) {
+      if (value !== prevValue) style.cssText = value
+    } else {
+      for (const key in value) {
+        setStyle(style, key, value[key])
+      }
+      if (prevValue && !isString(prevValue)) {
+        for (const key in prevValue) {
+          if (value[key] == null) {
+            setStyle(style, key, '')
+          }
+        }
+      }
+    }
+  } else if (
+    !(el instanceof SVGElement) &&
+    key in el &&
+    !forceAttrRE.test(key)
+  ) {
+    // @ts-ignore
+    el[key] = value
+    if (key === 'value') {
+      // @ts-ignore
+      el._value = value
+    }
+  } else {
+    // special case for <input v-model type="checkbox"> with
+    // :true-value & :false-value
+    // store value as dom properties since non-string values will be
+    // stringified.
+    if (key === 'true-value') {
+      ;(el as any)._trueValue = value
+    } else if (key === 'false-value') {
+      ;(el as any)._falseValue = value
+    } else if (value != null) {
+      el.setAttribute(key, value)
+    } else {
+      el.removeAttribute(key)
+    }
+  }
+}
+
+const importantRE = /\s*!important$/
+
+const setStyle = (
+  style: CSSStyleDeclaration,
+  name: string,
+  val: string | string[]
+) => {
+  if (isArray(val)) {
+    val.forEach((v) => setStyle(style, name, v))
+  } else {
+    if (name.startsWith('--')) {
+      // custom property definition
+      style.setProperty(name, val)
+    } else {
+      if (importantRE.test(val)) {
+        // !important
+        style.setProperty(
+          hyphenate(name),
+          val.replace(importantRE, ''),
+          'important'
+        )
+      } else {
+        style[name as any] = val
+      }
+    }
+  }
+}
+
+=== End/Start of File ===
+File: ./src/directives/effect.ts
+import { Directive } from '.'
+import { execute } from '../eval'
+import { nextTick } from '../scheduler'
+
+export const effect: Directive = ({ el, ctx, exp, effect }) => {
+  nextTick(() => effect(() => execute(ctx.scope, exp, el)))
+}
+
+=== End/Start of File ===
+File: ./src/directives/for.ts
+import { isArray, isObject } from '@vue/shared'
+import { Block } from '../block'
+import { evaluate } from '../eval'
+import { Context, createScopedContext } from '../context'
+
+const forAliasRE = /([\s\S]*?)\s+(?:in|of)\s+([\s\S]*)/
+const forIteratorRE = /,([^,\}\]]*)(?:,([^,\}\]]*))?$/
+const stripParensRE = /^\(|\)$/g
+const destructureRE = /^[{[]\s*((?:[\w_$]+\s*,?\s*)+)[\]}]$/
+
+type KeyToIndexMap = Map<any, number>
+
+export const _for = (el: Element, exp: string, ctx: Context) => {
+  const inMatch = exp.match(forAliasRE)
+  if (!inMatch) {
+    import.meta.env.DEV && console.warn(`invalid v-for expression: ${exp}`)
+    return
+  }
+
+  const nextNode = el.nextSibling
+
+  const parent = el.parentElement!
+  const anchor = new Text('')
+  parent.insertBefore(anchor, el)
+  parent.removeChild(el)
+
+  const sourceExp = inMatch[2].trim()
+  let valueExp = inMatch[1].trim().replace(stripParensRE, '').trim()
+  let destructureBindings: string[] | undefined
+  let isArrayDestructure = false
+  let indexExp: string | undefined
+  let objIndexExp: string | undefined
+
+  let keyAttr = 'key'
+  let keyExp =
+    el.getAttribute(keyAttr) ||
+    el.getAttribute((keyAttr = ':key')) ||
+    el.getAttribute((keyAttr = 'v-bind:key'))
+  if (keyExp) {
+    el.removeAttribute(keyAttr)
+    if (keyAttr === 'key') keyExp = JSON.stringify(keyExp)
+  }
+
+  let match
+  if ((match = valueExp.match(forIteratorRE))) {
+    valueExp = valueExp.replace(forIteratorRE, '').trim()
+    indexExp = match[1].trim()
+    if (match[2]) {
+      objIndexExp = match[2].trim()
+    }
+  }
+
+  if ((match = valueExp.match(destructureRE))) {
+    destructureBindings = match[1].split(',').map((s) => s.trim())
+    isArrayDestructure = valueExp[0] === '['
+  }
+
+  let mounted = false
+  let blocks: Block[]
+  let childCtxs: Context[]
+  let keyToIndexMap: Map<any, number>
+
+  const createChildContexts = (source: unknown): [Context[], KeyToIndexMap] => {
+    const map: KeyToIndexMap = new Map()
+    const ctxs: Context[] = []
+
+    if (isArray(source)) {
+      for (let i = 0; i < source.length; i++) {
+        ctxs.push(createChildContext(map, source[i], i))
+      }
+    } else if (typeof source === 'number') {
+      for (let i = 0; i < source; i++) {
+        ctxs.push(createChildContext(map, i + 1, i))
+      }
+    } else if (isObject(source)) {
+      let i = 0
+      for (const key in source) {
+        ctxs.push(createChildContext(map, source[key], i++, key))
+      }
+    }
+
+    return [ctxs, map]
+  }
+
+  const createChildContext = (
+    map: KeyToIndexMap,
+    value: any,
+    index: number,
+    objKey?: string
+  ): Context => {
+    const data: any = {}
+    if (destructureBindings) {
+      destructureBindings.forEach(
+        (b, i) => (data[b] = value[isArrayDestructure ? i : b])
+      )
+    } else {
+      data[valueExp] = value
+    }
+    if (objKey) {
+      indexExp && (data[indexExp] = objKey)
+      objIndexExp && (data[objIndexExp] = index)
+    } else {
+      indexExp && (data[indexExp] = index)
+    }
+    const childCtx = createScopedContext(ctx, data)
+    const key = keyExp ? evaluate(childCtx.scope, keyExp) : index
+    map.set(key, index)
+    childCtx.key = key
+    return childCtx
+  }
+
+  const mountBlock = (ctx: Context, ref: Node) => {
+    const block = new Block(el, ctx)
+    block.key = ctx.key
+    block.insert(parent, ref)
+    return block
+  }
+
+  ctx.effect(() => {
+    const source = evaluate(ctx.scope, sourceExp)
+    const prevKeyToIndexMap = keyToIndexMap
+    ;[childCtxs, keyToIndexMap] = createChildContexts(source)
+    if (!mounted) {
+      blocks = childCtxs.map((s) => mountBlock(s, anchor))
+      mounted = true
+    } else {
+      for (let i = 0; i < blocks.length; i++) {
+        if (!keyToIndexMap.has(blocks[i].key)) {
+          blocks[i].remove()
+        }
+      }
+      
+      const nextBlocks: Block[] = []
+      let i = childCtxs.length
+      let nextBlock: Block | undefined
+      let prevMovedBlock: Block | undefined
+      while (i--) {
+        const childCtx = childCtxs[i]
+        const oldIndex = prevKeyToIndexMap.get(childCtx.key)
+        let block
+        if (oldIndex == null) {
+          // new
+          block = mountBlock(
+            childCtx,
+            nextBlock ? nextBlock.el : anchor
+          )
+        } else {
+          // update
+          block = blocks[oldIndex]
+          Object.assign(block.ctx.scope, childCtx.scope)
+          if (oldIndex !== i) {
+            // moved
+            if (
+              blocks[oldIndex + 1] !== nextBlock || 
+              // If the next has moved, it must move too
+              prevMovedBlock === nextBlock
+            ) {
+              prevMovedBlock = block
+              block.insert(parent, nextBlock ? nextBlock.el : anchor)
+            }
+          }
+        }
+        nextBlocks.unshift(nextBlock = block)
+      }
+      blocks = nextBlocks
+    }
+  })
+
+  return nextNode
+}
+
+=== End/Start of File ===
+File: ./src/directives/html.ts
+import { Directive } from '.'
+
+export const html: Directive = ({ el, get, effect }) => {
+  effect(() => {
+    el.innerHTML = get()
+  })
+}
+
+=== End/Start of File ===
+File: ./src/directives/if.ts
+import { Block } from '../block'
+import { evaluate } from '../eval'
+import { checkAttr } from '../utils'
+import { Context } from '../context'
+
+interface Branch {
+  exp?: string | null
+  el: Element
+}
+
+export const _if = (el: Element, exp: string, ctx: Context) => {
+  if (import.meta.env.DEV && !exp.trim()) {
+    console.warn(`v-if expression cannot be empty.`)
+  }
+
+  const parent = el.parentElement!
+  const anchor = new Comment('v-if')
+  parent.insertBefore(anchor, el)
+
+  const branches: Branch[] = [
+    {
+      exp,
+      el
+    }
+  ]
+
+  // locate else branch
+  let elseEl: Element | null
+  let elseExp: string | null
+  while ((elseEl = el.nextElementSibling)) {
+    elseExp = null
+    if (
+      checkAttr(elseEl, 'v-else') === '' ||
+      (elseExp = checkAttr(elseEl, 'v-else-if'))
+    ) {
+      parent.removeChild(elseEl)
+      branches.push({ exp: elseExp, el: elseEl })
+    } else {
+      break
+    }
+  }
+
+  const nextNode = el.nextSibling
+  parent.removeChild(el)
+
+  let block: Block | undefined
+  let activeBranchIndex: number = -1
+
+  const removeActiveBlock = () => {
+    if (block) {
+      parent.insertBefore(anchor, block.el)
+      block.remove()
+      block = undefined
+    }
+  }
+
+  ctx.effect(() => {
+    for (let i = 0; i < branches.length; i++) {
+      const { exp, el } = branches[i]
+      if (!exp || evaluate(ctx.scope, exp)) {
+        if (i !== activeBranchIndex) {
+          removeActiveBlock()
+          block = new Block(el, ctx)
+          block.insert(parent, anchor)
+          parent.removeChild(anchor)
+          activeBranchIndex = i
+        }
+        return
+      }
+    }
+    // no matched branch.
+    activeBranchIndex = -1
+    removeActiveBlock()
+  })
+
+  return nextNode
+}
+
+=== End/Start of File ===
+File: ./src/directives/index.ts
+import { Context } from '../context'
+import { effect as rawEffect } from '@vue/reactivity'
+import { bind } from './bind'
+import { on } from './on'
+import { show } from './show'
+import { text } from './text'
+import { html } from './html'
+import { model } from './model'
+import { effect } from './effect'
+
+export interface Directive<T = Element> {
+  (ctx: DirectiveContext<T>): (() => void) | void
+}
+
+export interface DirectiveContext<T = Element> {
+  el: T
+  get: (exp?: string) => any
+  effect: typeof rawEffect
+  exp: string
+  arg?: string
+  modifiers?: Record<string, true>
+  ctx: Context
+}
+
+export const builtInDirectives: Record<string, Directive<any>> = {
+  bind,
+  on,
+  show,
+  text,
+  html,
+  model,
+  effect
+}
+
+=== End/Start of File ===
+File: ./src/directives/model.ts
+import { isArray, looseEqual, looseIndexOf, toNumber } from '@vue/shared'
+import { Directive } from '.'
+import { listen } from '../utils'
+
+export const model: Directive<
+  HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
+> = ({ el, exp, get, effect, modifiers }) => {
+  const type = el.type
+  const assign = get(`(val) => { ${exp} = val }`)
+  const { trim, number = type === 'number' } = modifiers || {}
+
+  if (el.tagName === 'SELECT') {
+    const sel = el as HTMLSelectElement
+    listen(el, 'change', () => {
+      const selectedVal = Array.prototype.filter
+        .call(sel.options, (o: HTMLOptionElement) => o.selected)
+        .map((o: HTMLOptionElement) =>
+          number ? toNumber(getValue(o)) : getValue(o)
+        )
+      assign(sel.multiple ? selectedVal : selectedVal[0])
+    })
+    effect(() => {
+      const value = get()
+      const isMultiple = sel.multiple
+      for (let i = 0, l = sel.options.length; i < l; i++) {
+        const option = sel.options[i]
+        const optionValue = getValue(option)
+        if (isMultiple) {
+          if (isArray(value)) {
+            option.selected = looseIndexOf(value, optionValue) > -1
+          } else {
+            option.selected = value.has(optionValue)
+          }
+        } else {
+          if (looseEqual(getValue(option), value)) {
+            if (sel.selectedIndex !== i) sel.selectedIndex = i
+            return
+          }
+        }
+      }
+      if (!isMultiple && sel.selectedIndex !== -1) {
+        sel.selectedIndex = -1
+      }
+    })
+  } else if (type === 'checkbox') {
+    listen(el, 'change', () => {
+      const modelValue = get()
+      const checked = (el as HTMLInputElement).checked
+      if (isArray(modelValue)) {
+        const elementValue = getValue(el)
+        const index = looseIndexOf(modelValue, elementValue)
+        const found = index !== -1
+        if (checked && !found) {
+          assign(modelValue.concat(elementValue))
+        } else if (!checked && found) {
+          const filtered = [...modelValue]
+          filtered.splice(index, 1)
+          assign(filtered)
+        }
+      } else {
+        assign(getCheckboxValue(el as HTMLInputElement, checked))
+      }
+    })
+
+    let oldValue: any
+    effect(() => {
+      const value = get()
+      if (isArray(value)) {
+        ;(el as HTMLInputElement).checked =
+          looseIndexOf(value, getValue(el)) > -1
+      } else if (value !== oldValue) {
+        ;(el as HTMLInputElement).checked = looseEqual(
+          value,
+          getCheckboxValue(el as HTMLInputElement, true)
+        )
+      }
+      oldValue = value
+    })
+  } else if (type === 'radio') {
+    listen(el, 'change', () => {
+      assign(getValue(el))
+    })
+    let oldValue: any
+    effect(() => {
+      const value = get()
+      if (value !== oldValue) {
+        ;(el as HTMLInputElement).checked = looseEqual(value, getValue(el))
+      }
+    })
+  } else {
+    // text-like
+    const resolveValue = (val: string) => {
+      if (trim) return val.trim()
+      if (number) return toNumber(val)
+      return val
+    }
+
+    listen(el, 'compositionstart', onCompositionStart)
+    listen(el, 'compositionend', onCompositionEnd)
+    listen(el, modifiers?.lazy ? 'change' : 'input', () => {
+      if ((el as any).composing) return
+      assign(resolveValue(el.value))
+    })
+    if (trim) {
+      listen(el, 'change', () => {
+        el.value = el.value.trim()
+      })
+    }
+
+    effect(() => {
+      if ((el as any).composing) {
+        return
+      }
+      const curVal = el.value
+      const newVal = get()
+      if (document.activeElement === el && resolveValue(curVal) === newVal) {
+        return
+      }
+      if (curVal !== newVal) {
+        el.value = newVal
+      }
+    })
+  }
+}
+
+const getValue = (el: any) => ('_value' in el ? el._value : el.value)
+
+// retrieve raw value for true-value and false-value set via :true-value or :false-value bindings
+const getCheckboxValue = (
+  el: HTMLInputElement & { _trueValue?: any; _falseValue?: any },
+  checked: boolean
+) => {
+  const key = checked ? '_trueValue' : '_falseValue'
+  return key in el ? el[key] : checked
+}
+
+const onCompositionStart = (e: Event) => {
+  ;(e.target as any).composing = true
+}
+
+const onCompositionEnd = (e: Event) => {
+  const target = e.target as any
+  if (target.composing) {
+    target.composing = false
+    trigger(target, 'input')
+  }
+}
+
+const trigger = (el: HTMLElement, type: string) => {
+  const e = document.createEvent('HTMLEvents')
+  e.initEvent(type, true, true)
+  el.dispatchEvent(e)
+}
+
+=== End/Start of File ===
+File: ./src/directives/on.ts
+import { Directive } from '.'
+import { hyphenate } from '@vue/shared'
+import { listen } from '../utils'
+import { nextTick } from '../scheduler'
+
+// same as vue 2
+const simplePathRE =
+  /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*|\['[^']*?']|\["[^"]*?"]|\[\d+]|\[[A-Za-z_$][\w$]*])*$/
+
+const systemModifiers = ['ctrl', 'shift', 'alt', 'meta']
+
+type KeyedEvent = KeyboardEvent | MouseEvent | TouchEvent
+
+const modifierGuards: Record<
+  string,
+  (e: Event, modifiers: Record<string, true>) => void | boolean
+> = {
+  stop: (e) => e.stopPropagation(),
+  prevent: (e) => e.preventDefault(),
+  self: (e) => e.target !== e.currentTarget,
+  ctrl: (e) => !(e as KeyedEvent).ctrlKey,
+  shift: (e) => !(e as KeyedEvent).shiftKey,
+  alt: (e) => !(e as KeyedEvent).altKey,
+  meta: (e) => !(e as KeyedEvent).metaKey,
+  left: (e) => 'button' in e && (e as MouseEvent).button !== 0,
+  middle: (e) => 'button' in e && (e as MouseEvent).button !== 1,
+  right: (e) => 'button' in e && (e as MouseEvent).button !== 2,
+  exact: (e, modifiers) =>
+    systemModifiers.some((m) => (e as any)[`${m}Key`] && !modifiers[m])
+}
+
+export const on: Directive = ({ el, get, exp, arg, modifiers }) => {
+  if (!arg) {
+    if (import.meta.env.DEV) {
+      console.error(`v-on="obj" syntax is not supported in petite-vue.`)
+    }
+    return
+  }
+
+  let handler = simplePathRE.test(exp)
+    ? get(`(e => ${exp}(e))`)
+    : get(`($event => { ${exp} })`)
+
+  // special lifecycle events
+  if (import.meta.env.DEV && (arg === 'mounted' || arg === 'unmounted')) {
+    console.error(
+      `mounted and unmounted hooks now need to be prefixed with vue: ` +
+        `- use @vue:${arg}="handler" instead.`
+    )
+  }
+  if (arg === 'vue:mounted') {
+    nextTick(handler)
+    return
+  } else if (arg === 'vue:unmounted') {
+    return () => handler()
+  }
+
+  if (modifiers) {
+    // map modifiers
+    if (arg === 'click') {
+      if (modifiers.right) arg = 'contextmenu'
+      if (modifiers.middle) arg = 'mouseup'
+    }
+
+    const raw = handler
+    handler = (e: Event) => {
+      if ('key' in e && !(hyphenate((e as KeyboardEvent).key) in modifiers)) {
+        return
+      }
+      for (const key in modifiers) {
+        const guard = modifierGuards[key]
+        if (guard && guard(e, modifiers)) {
+          return
+        }
+      }
+      return raw(e)
+    }
+  }
+
+  listen(el, arg, handler, modifiers)
+}
+
+=== End/Start of File ===
+File: ./src/directives/ref.ts
+import { Directive } from '.'
+
+export const ref: Directive = ({
+  el,
+  ctx: {
+    scope: { $refs }
+  },
+  get,
+  effect
+}) => {
+  let prevRef: any
+  effect(() => {
+    const ref = get()
+    $refs[ref] = el
+    if (prevRef && ref !== prevRef) {
+      delete $refs[prevRef]
+    }
+    prevRef = ref
+  })
+  return () => {
+    prevRef && delete $refs[prevRef]
+  }
+}
+
+=== End/Start of File ===
+File: ./src/directives/show.ts
+import { Directive } from '.'
+
+export const show: Directive<HTMLElement> = ({ el, get, effect }) => {
+  const initialDisplay = el.style.display
+  effect(() => {
+    el.style.display = get() ? initialDisplay : 'none'
+  })
+}
+
+=== End/Start of File ===
+File: ./src/directives/text.ts
+import { isObject } from '@vue/shared'
+import { Directive } from '.'
+
+export const text: Directive<Text | Element> = ({ el, get, effect }) => {
+  effect(() => {
+    el.textContent = toDisplayString(get())
+  })
+}
+
+export const toDisplayString = (value: any) =>
+  value == null
+    ? ''
+    : isObject(value)
+    ? JSON.stringify(value, null, 2)
+    : String(value)
+
+=== End/Start of File ===
+File: ./src/eval.ts
+const evalCache: Record<string, Function> = Object.create(null)
+
+export const evaluate = (scope: any, exp: string, el?: Node) =>
+  execute(scope, `return(${exp})`, el)
+
+export const execute = (scope: any, exp: string, el?: Node) => {
+  const fn = evalCache[exp] || (evalCache[exp] = toFunction(exp))
+  try {
+    return fn(scope, el)
+  } catch (e) {
+    if (import.meta.env.DEV) {
+      console.warn(`Error when evaluating expression "${exp}":`)
+    }
+    console.error(e)
+  }
+}
+
+const toFunction = (exp: string): Function => {
+  try {
+    return new Function(`$data`, `$el`, `with($data){${exp}}`)
+  } catch (e) {
+    console.error(`${(e as Error).message} in expression: ${exp}`)
+    return () => {}
+  }
+}
+
+=== End/Start of File ===
+File: ./src/index.ts
+export { createApp } from './app'
+export { nextTick } from './scheduler'
+export { reactive } from '@vue/reactivity'
+
+import { createApp } from './app'
+
+const s = document.currentScript
+if (s && s.hasAttribute('init')) {
+  createApp().mount()
+}
+
+=== End/Start of File ===
+File: ./src/scheduler.ts
+let queued = false
+const queue: Function[] = []
+const p = Promise.resolve()
+
+export const nextTick = (fn: () => void) => p.then(fn)
+
+export const queueJob = (job: Function) => {
+  if (!queue.includes(job)) queue.push(job)
+  if (!queued) {
+    queued = true
+    nextTick(flushJobs)
+  }
+}
+
+const flushJobs = () => {
+  for (const job of queue) {
+    job()
+  }
+  queue.length = 0
+  queued = false
+}
+
+=== End/Start of File ===
+File: ./src/utils.ts
+export const checkAttr = (el: Element, name: string): string | null => {
+  const val = el.getAttribute(name)
+  if (val != null) el.removeAttribute(name)
+  return val
+}
+
+export const listen = (
+  el: Element,
+  event: string,
+  handler: any,
+  options?: any
+) => {
+  el.addEventListener(event, handler, options)
+}
+
+=== End/Start of File ===
+File: ./src/walk.ts
+import { builtInDirectives, Directive } from './directives'
+import { _if } from './directives/if'
+import { _for } from './directives/for'
+import { bind } from './directives/bind'
+import { on } from './directives/on'
+import { text } from './directives/text'
+import { evaluate } from './eval'
+import { checkAttr } from './utils'
+import { ref } from './directives/ref'
+import { Context, createScopedContext } from './context'
+
+const dirRE = /^(?:v-|:|@)/
+const modifierRE = /\.([\w-]+)/g
+
+export let inOnce = false
+
+export const walk = (node: Node, ctx: Context): ChildNode | null | void => {
+  const type = node.nodeType
+  if (type === 1) {
+    // Element
+    const el = node as Element
+    if (el.hasAttribute('v-pre')) {
+      return
+    }
+
+    checkAttr(el, 'v-cloak')
+
+    let exp: string | null
+
+    // v-if
+    if ((exp = checkAttr(el, 'v-if'))) {
+      return _if(el, exp, ctx)
+    }
+
+    // v-for
+    if ((exp = checkAttr(el, 'v-for'))) {
+      return _for(el, exp, ctx)
+    }
+
+    // v-scope
+    if ((exp = checkAttr(el, 'v-scope')) || exp === '') {
+      const scope = exp ? evaluate(ctx.scope, exp) : {}
+      ctx = createScopedContext(ctx, scope)
+      if (scope.$template) {
+        resolveTemplate(el, scope.$template)
+      }
+    }
+
+    // v-once
+    const hasVOnce = checkAttr(el, 'v-once') != null
+    if (hasVOnce) {
+      inOnce = true
+    }
+
+    // ref
+    if ((exp = checkAttr(el, 'ref'))) {
+      applyDirective(el, ref, `"${exp}"`, ctx)
+    }
+
+    // process children first before self attrs
+    walkChildren(el, ctx)
+
+    // other directives
+    const deferred: [string, string][] = []
+    for (const { name, value } of [...el.attributes]) {
+      if (dirRE.test(name) && name !== 'v-cloak') {
+        if (name === 'v-model') {
+          // defer v-model since it relies on :value bindings to be processed
+          // first, but also before v-on listeners (#73)
+          deferred.unshift([name, value])
+        } else if (name[0] === '@' || /^v-on\b/.test(name)) {
+          deferred.push([name, value])
+        } else {
+          processDirective(el, name, value, ctx)
+        }
+      }
+    }
+    for (const [name, value] of deferred) {
+      processDirective(el, name, value, ctx)
+    }
+
+    if (hasVOnce) {
+      inOnce = false
+    }
+  } else if (type === 3) {
+    // Text
+    const data = (node as Text).data
+    if (data.includes(ctx.delimiters[0])) {
+      let segments: string[] = []
+      let lastIndex = 0
+      let match
+      while ((match = ctx.delimitersRE.exec(data))) {
+        const leading = data.slice(lastIndex, match.index)
+        if (leading) segments.push(JSON.stringify(leading))
+        segments.push(`$s(${match[1]})`)
+        lastIndex = match.index + match[0].length
+      }
+      if (lastIndex < data.length) {
+        segments.push(JSON.stringify(data.slice(lastIndex)))
+      }
+      applyDirective(node, text, segments.join('+'), ctx)
+    }
+  } else if (type === 11) {
+    walkChildren(node as DocumentFragment, ctx)
+  }
+}
+
+const walkChildren = (node: Element | DocumentFragment, ctx: Context) => {
+  let child = node.firstChild
+  while (child) {
+    child = walk(child, ctx) || child.nextSibling
+  }
+}
+
+const processDirective = (
+  el: Element,
+  raw: string,
+  exp: string,
+  ctx: Context
+) => {
+  let dir: Directive
+  let arg: string | undefined
+  let modifiers: Record<string, true> | undefined
+
+  // modifiers
+  raw = raw.replace(modifierRE, (_, m) => {
+    ;(modifiers || (modifiers = {}))[m] = true
+    return ''
+  })
+
+  if (raw[0] === ':') {
+    dir = bind
+    arg = raw.slice(1)
+  } else if (raw[0] === '@') {
+    dir = on
+    arg = raw.slice(1)
+  } else {
+    const argIndex = raw.indexOf(':')
+    const dirName = argIndex > 0 ? raw.slice(2, argIndex) : raw.slice(2)
+    dir = builtInDirectives[dirName] || ctx.dirs[dirName]
+    arg = argIndex > 0 ? raw.slice(argIndex + 1) : undefined
+  }
+  if (dir) {
+    if (dir === bind && arg === 'ref') dir = ref
+    applyDirective(el, dir, exp, ctx, arg, modifiers)
+    el.removeAttribute(raw)
+  } else if (import.meta.env.DEV) {
+    console.error(`unknown custom directive ${raw}.`)
+  }
+}
+
+const applyDirective = (
+  el: Node,
+  dir: Directive<any>,
+  exp: string,
+  ctx: Context,
+  arg?: string,
+  modifiers?: Record<string, true>
+) => {
+  const get = (e = exp) => evaluate(ctx.scope, e, el)
+  const cleanup = dir({
+    el,
+    get,
+    effect: ctx.effect,
+    ctx,
+    exp,
+    arg,
+    modifiers
+  })
+  if (cleanup) {
+    ctx.cleanups.push(cleanup)
+  }
+}
+
+const resolveTemplate = (el: Element, template: string) => {
+  if (template[0] === '#') {
+    const templateEl = document.querySelector(template)
+    if (import.meta.env.DEV && !templateEl) {
+      console.error(
+        `template selector ${template} has no matching <template> element.`
+      )
+    }
+    el.appendChild((templateEl as HTMLTemplateElement).content.cloneNode(true))
+    return
+  }
+  el.innerHTML = template
+}
+
+=== End/Start of File ===
+File: ./tests/bind.html
+<style>
+  #green {
+    color: green;
+  }
+  .red {
+    color: red;
+  }
+  .orange {
+    color: orange;
+  }
+  .static {
+    font-weight: bold;
+  }
+  [v-cloak] {
+    opacity: 0;
+  }
+</style>
+
+<script type="module">
+  import { createApp, reactive } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+
+  // for testing
+  const data = (window.data = reactive({
+    id: 'green',
+    classes: ['foo', { red: true }],
+    style: { color: 'blue' },
+    obj: {
+      class: 'orange'
+    }
+  }))
+
+  createApp(data).mount()
+</script>
+
+<div v-scope v-cloak>
+  <div :id="id">simple binding - this should be green</div>
+  <div class="static" :class="classes">
+    class binding - this should be red and bold
+  </div>
+  <div style="font-weight: bold" :style="style">
+    style binding - this should be blue and bold
+  </div>
+  <div v-bind="obj">object binding - this should be orange</div>
+</div>
+
+=== End/Start of File ===
+File: ./tests/cloak.html
+<script type="module">
+  import { createApp } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+  createApp({
+    msg: 'content',
+    hide: false
+  }).mount()
+</script>
+
+<div v-scope v-cloak>
+  <div v-cloak v-if="!hide">{{ msg }}</div>
+  <button @click="hide = !hide">toggle</button>
+</div>
+
+<style>
+  [v-cloak] {
+    display: none;
+  }
+</style>
+=== End/Start of File ===
+File: ./tests/component.html
+<script type="module">
+  import { createApp, reactive } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+
+  function MyComp() {
+    return {
+      $template: '#comp',
+      count: 0,
+      get plusOne() {
+        return this.count + 1
+      }
+    }
+  }
+
+  createApp({
+    MyComp
+  }).mount()
+</script>
+
+<template id="comp">
+  {{ count }} {{ plusOne }}
+  <button @click="count++">++</button>
+</template>
+
+<div v-scope="MyComp()"></div>
+=== End/Start of File ===
+File: ./tests/custom-delimiters.html
+<script type="module">
+  import { createApp } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+  createApp({
+    $delimiters: ['${', '}']
+  }).mount()
+</script>
+
+<div v-scope="{ count: 1 }">
+  <p v-if="count">count is ${ count }!</p>
+  <button @click="count++">increase</button>
+
+  <p v-for="i in [1, 2, 3]" :key="i">${ i }</p>
+
+  <p v-if="true">${ count }</p>
+</div>
+
+=== End/Start of File ===
+File: ./tests/effect.html
+<script type="module">
+  import { createApp } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+  createApp().mount()
+</script>
+
+<div v-scope="{ count: 0 }">
+  <div v-effect="$el.textContent = count"></div>
+  <button @click="count++">++</button>
+</div>
+
+=== End/Start of File ===
+File: ./tests/for.html
+<script type="module">
+  import { createApp } from "https://cdn.skypack.dev/petite-vue@0.4.1"
+
+  let id = 4
+  createApp({
+    list: [
+      { id: 1, text: "bar" },
+      { id: 2, text: "boo" },
+      { id: 3, text: "baz" },
+      { id: 4, text: "bazz" },
+    ],
+    add() {
+      this.list.push({ id: ++id, text: "new item" })
+    },
+    splice() {
+      this.list.splice(1, 0, { id: ++id, text: "new item" })
+    },
+  }).mount("#app")
+</script>
+
+<div id="app">
+  <button @click="add">add</button>
+  <button @click="list.reverse()">reverse</button>
+  <button @click="list.pop()">pop</button>
+  <button @click="splice">splice</button>
+  <ul>
+    <li v-for="({ id, text }, index) in list" :key="id">
+      <div>{{ index }} {{ { id, text } }}</div>
+    </li>
+  </ul>
+
+  <ul>
+    <li v-for="item of list" :key="item.id">
+      <input v-model="item.text" />
+    </li>
+  </ul>
+</div>
+
+=== End/Start of File ===
+File: ./tests/html.html
+<script type="module">
+  import { createApp } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+  createApp().mount()
+</script>
+
+<div v-scope="{ ele:'<span>Hello World</span>' }">
+  <p v-html="ele"></p>
+</div>
+
+
+=== End/Start of File ===
+File: ./tests/if.html
+<script type="module">
+  import { createApp } from "https://cdn.skypack.dev/petite-vue@0.4.1"
+
+  createApp().mount("#app")
+</script>
+
+<div id="app" v-scope="{ open: true, elseOpen: true }">
+  <button @click="open = !open">toggle</button>
+  <button @click="elseOpen = !elseOpen">toggle else</button>
+  <div v-if="open">ok</div>
+  <div v-else-if="elseOpen">else if</div>
+  <template v-else>else</template>
+</div>
+
+=== End/Start of File ===
+File: ./tests/model.html
+<script type="module">
+  import { createApp } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+
+  createApp().mount('#app')
+</script>
+
+<div
+  id="app"
+  v-scope="{
+  text: 'hello',
+  checked: true,
+  checkToggle: { a: 1 },
+  trueValue: { a: 1 },
+  falseValue: { a: 2 },
+  arr: ['one'],
+  radioSelected: 'two',
+  selected: 'two'
+}"
+>
+  <pre>{{ $data }}</pre>
+  <h2>Text Input</h2>
+  {{ text }}
+  <input v-model.trim="text" />
+
+  <h2>TextArea</h2>
+  {{ text }}
+  <textarea v-model.trim="text"></textarea>
+
+  <h2>Checkbox</h2>
+  <input type="checkbox" id="checkbox" v-model="checked" />
+  <label for="checkbox">{{ checked }}</label>
+
+  <h2>Checkbox w/ Array</h2>
+  <label><input type="checkbox" v-model="arr" value="one" /> one</label>
+  <label><input type="checkbox" v-model="arr" value="two" /> two</label>
+  <label
+    ><input type="checkbox" v-model="arr" :value="123" /> actual number</label
+  >
+  <div>{{ arr }}</div>
+
+  <h2>Checkbox w/ true-value / false-value</h2>
+  <input
+    type="checkbox"
+    v-model="checkToggle"
+    :true-value="trueValue"
+    :false-value="falseValue"
+  />
+  <div>{{ checkToggle }}</div>
+
+  <h2>Radio</h2>
+  <label><input type="radio" v-model="radioSelected" value="one" /> one</label>
+  <label><input type="radio" v-model="radioSelected" value="two" /> two</label>
+  <label
+    ><input type="radio" v-model="radioSelected" value="three" /> three</label
+  >
+  <div>{{ radioSelected }}</div>
+
+  <h2>Select</h2>
+  <select v-model="selected" @change="console.log(selected, $event.target.value)">
+    <option>one</option>
+    <option>two</option>
+    <option>three</option>
+  </select>
+  <div>{{ selected }}</div>
+</div>
+
+=== End/Start of File ===
+File: ./tests/multi-mount.html
+<script type="module">
+  import { createApp, reactive } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+
+  const store = reactive({
+    count: 0,
+    inc() {
+      this.count++
+    }
+  })
+
+  createApp({
+    store,
+    count: 1
+  }).mount('#app1')
+
+  createApp({
+    store,
+    count: 2
+  }).mount('#app2')
+</script>
+
+<div id="app1">
+  Global count {{ store.count }}
+  Local count {{ count }}
+</div>
+
+<div id="app2">
+  Global count {{ store.count }}
+  Local count {{ count }}
+</div>
+=== End/Start of File ===
+File: ./tests/on.html
+<script type="module">
+  import { createApp } from "https://cdn.skypack.dev/petite-vue@0.4.1"
+
+  createApp().mount("#app")
+</script>
+
+<div id="app">
+  <input
+    type="text"
+    @keyup.x="alert('yo')"
+    placeholder="type x to test key modifier"
+  />
+  <form>
+    <button type="submit" @click.prevent.stop>submit (prevented)</button>
+  </form>
+  <button @click.right="alert('clicked')">right click</button>
+  <button @click.middle="alert('clicked')">middle click</button>
+  <button @click.once="alert('clicked')">click once</button>
+</div>
+
+=== End/Start of File ===
+File: ./tests/once.html
+<script type="module">
+  import { createApp } from "https://cdn.skypack.dev/petite-vue@0.4.1"
+  createApp().mount()
+</script>
+
+<div v-scope="{ count: 5 }">
+  {{ count }}
+  <div v-once>
+    <h2>Once</h2>
+    {{ count }}
+    <span v-text="count"></span>
+    <span v-for="i in count">{{ i }}</span>
+  </div>
+  <span v-text="count"></span>
+  <button @click="count++">++</button>
+</div>
+
+=== End/Start of File ===
+File: ./tests/pre.html
+<script type="module">
+  import { createApp } from "https://cdn.skypack.dev/petite-vue@0.4.1"
+  createApp().mount()
+</script>
+
+<div v-scope="{ count: 0 }">
+  <p>{{ count }}</p>
+  <p v-pre>{{ count }}</p>
+  <button @click="count++">increment</button>
+</div>
+
+=== End/Start of File ===
+File: ./tests/reactive.html
+<script type="module">
+  import { createApp, reactive } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+
+  const store = reactive({
+    count: 0,
+    inc() {
+      this.count++
+    }
+  })
+
+  // manipulate it here
+  store.inc()
+
+  createApp({
+    // share it with app scopes
+    store
+  }).mount()
+</script>
+
+<div v-scope="{ localCount: 0 }">
+  <p>Global {{ store.count }}</p>
+  <button @click="store.inc">increment</button>
+
+  <p>Local {{ localCount }}</p>
+  <button @click="localCount++">increment</button>
+</div>
+=== End/Start of File ===
+File: ./tests/ref.html
+<script type="module">
+  import { createApp, reactive } from "https://cdn.skypack.dev/petite-vue@0.4.1"
+  createApp().mount()
+</script>
+
+<div
+  id="root"
+  ref="root"
+  v-scope="{ dynamicRef: 'x', show: true }"
+  v-effect="console.log({ x: $refs.x, y: $refs.y, input: $refs.input })"
+>
+  <p>Accessing root el: id is {{ $refs.root.id }}</p>
+
+  <input ref="input" />
+  <span v-if="show" :ref="dynamicRef">Span with dynamic ref</span>
+  <p>dynamicRef is {{ dynamicRef }}</p>
+  <button @click="dynamicRef = dynamicRef === 'x' ? 'y' : 'x'">
+    change dynamicRef
+  </button>
+  <button @click="show = !show">toggle</button>
+
+  <div v-scope>
+    <p ref="x">nested scope ref</p>
+    <button
+      @click="console.log({ x: $refs.x, y: $refs.y, input: $refs.input })"
+    >
+      log nested scope refs
+    </button>
+  </div>
+</div>
+
+=== End/Start of File ===
+File: ./tests/scope.html
+<script type="module">
+  import { createApp } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+  createApp().mount()
+</script>
+
+<div v-scope="{ msg: 'one' }">
+  {{ msg }} <button @click="msg = 1">Change one</button>
+</div>
+
+<div v-scope="{ msg: 'two', outer: 'outer' }">
+  <pre>{{ $data }}</pre>
+  {{ msg }} {{ outer }}
+  <button @click="msg = 2">Change two</button>
+  <button @click="outer = 'changed'">Change outer</button>
+  <div v-scope="{ msg: 'three', inner: 'inner' }">
+    <pre>{{ $data }}</pre>
+    {{ msg }} {{ inner }} {{ outer }}
+    <button @click="msg = 3">Change three</button>
+    <button @click="inner = 'changed'">Change inner</button>
+    <button @click="outer = 'changed by inner'">Change outer</button>
+
+    <div v-scope="{}">
+      <button @click="outer = 'lol'">change outer</button>
+    </div>
+  </div>
+</div>
+
+=== End/Start of File ===
+File: ./tests/show.html
+<script type="module">
+  import { createApp } from 'https://cdn.skypack.dev/petite-vue@0.4.1'
+
+  createApp().mount('#app')
+</script>
+
+<div id="app" v-scope="{ open: true }">
+  <button @click="open = !open">toggle</button>
+  <div v-show="open">ok</div>
+</div>
+
+=== End/Start of File ===
+File: ./tests/text.html
+<script type="module">
+  import { createApp } from "https://cdn.skypack.dev/petite-vue@0.4.1"
+  createApp().mount()
+</script>
+
+<div v-scope="{ count: 1 }">
+  <p v-text="count"></p>
+  <button @click="count++">increase</button>
+</div>
+
+=== End/Start of File ===
+File: ./tsconfig.json
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "outDir": "dist",
+    "declaration": true,
+    "sourceMap": false,
+    "target": "esnext",
+    "module": "esnext",
+    "moduleResolution": "node",
+    "allowJs": false,
+    "strict": true,
+    "noUnusedLocals": true,
+    "rootDir": ".",
+    "types": ["vite/client"]
+  },
+  "include": [
+    "src"
+  ]
+}
+
+=== End/Start of File ===
+File: ./vite.config.ts
+import { defineConfig } from 'vite'
+import { resolve } from 'path'
+
+export default defineConfig({
+  esbuild: {
+    minify: true
+  },
+  build: {
+    target: 'esnext',
+    minify: 'terser',
+    lib: {
+      entry: resolve(__dirname, 'src/index.ts'),
+      name: 'PetiteVue',
+      formats: ['es', 'umd', 'iife']
+    },
+    rollupOptions: {
+      plugins: [
+        {
+          name: 'remove-collection-handlers',
+          transform(code, id) {
+            if (id.endsWith('reactivity.esm-bundler.js')) {
+              return code
+                .replace(`mutableCollectionHandlers,`, `null,`)
+                .replace(`readonlyCollectionHandlers,`, `null,`)
+            }
+          }
+        }
+      ]
+    }
+  }
+})
+
+=== End/Start of File ===
