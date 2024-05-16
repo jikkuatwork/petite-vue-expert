@@ -23,3 +23,19 @@ Attached files is concatenated codebase of the framework and its dependencies.
 ## Ask
 
 - Reply that you are ready to assit if you understand the code & instructions.
+
+# Coding Patterns
+
+1. Always generate *full* code files not snippets
+2. Always respect the code/dependencies already present
+3. When modifying, change only the specific parts of the file required to do the
+   change
+4. Try to adhere to the prettier.json attached
+5. Tailwind 2.2.19 is used via CDN & a custom CSS file: `tw.css` is used
+6. Go through tw.css to understand the meaning of the classes used
+7. Study how the sample project is structured, how state is managed and how
+   components are split so that this pattern is used when you generate code
+8. Make sure the Petite Vue components you generate are pure functions with no
+   dependencies except the utility classes of Tailwind 2.2.19 (CDN version)
+9. If a markup is provided to convert to PV, try to extract props & build a pure
+   function PV component
